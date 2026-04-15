@@ -11,7 +11,7 @@ class Runtime:
         self.mem_mgr = MemoryManager()
         self.typesys = TypeSystem()
 
-    def load_module(self, path: str):
+    def load_module(self, path: str) -> dict[str, any]:
         ctx = self.loader.load(path)
 
         store = ctx['store']
@@ -22,7 +22,7 @@ class Runtime:
 
         return ctx
     
-    def get_functions(self, ctx: dict[str, any]):
+    def get_functions(self, ctx: dict[str, any]) -> list[str]:
         return self.abi.get_functions(
             ctx["store"],
             ctx["instance"],
@@ -30,7 +30,7 @@ class Runtime:
             self.typesys
         )
     
-    def call(self, ctx: dict[str, any], func_name: str, args: list):
+    def call(self, ctx: dict[str, any], func_name: str, args: list) -> any:
         result = self.abi.call_function(
             ctx["store"],
             ctx["instance"],
@@ -42,7 +42,7 @@ class Runtime:
 
         return result
     
-    def run(self, path: str, func_name: str, args: list):
+    def run(self, path: str, func_name: str, args: list) -> any:
         ctx = self.load_module(path)
 
         result = self.call(ctx, func_name, args)
@@ -51,19 +51,19 @@ class Runtime:
 
         return result
     
-    def cleanup(self, ctx: dict[str, any]):
+    def cleanup(self, ctx: dict[str, any]) -> None:
         self.abi.call_cleanup(
             ctx["store"],
             ctx["instance"]
         )
 
-    def safe_execute(self, ctx: dict[str, any], func_name: str, args: list):
+    def safe_execute(self, ctx: dict[str, any], func_name: str, args: list) -> dict[str, any]:
         try:
             return self.call(ctx, func_name, args)
         except Exception as e:
             return {"error": str(e)}
     
-    def batch_call(self, ctx: dict[str, any], calls: list[tuple[str, list]]):
+    def batch_call(self, ctx: dict[str, any], calls: list[tuple[str, list]]) -> list:
         results = []
         for fn, args in calls:
             results.append(self.call(ctx, fn, args))

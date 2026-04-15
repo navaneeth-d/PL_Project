@@ -4,30 +4,30 @@ from host.memory import MemoryManager
 
 
 class TypeSystem:
-    def serialize(self, data: dict):
+    def serialize(self, data: dict) -> bytes:
         return json.dumps(data).encode('utf-8')
     
-    def deserialize(self, data_bytes: bytes):
+    def deserialize(self, data_bytes: bytes) -> dict:
         return json.loads(data_bytes.decode('utf-8'))
     
-    def to_wasm(self, mem_mgr: MemoryManager, store: Store, instance: Instance, data: dict):
+    def to_wasm(self, mem_mgr: MemoryManager, store: Store, instance: Instance, data: dict) -> tuple[int, int]:
         raw = self.serialize(data)
         ptr, size = mem_mgr.write_bytes(store, instance, raw)
         return ptr, size
     
-    def from_wasm(self, mem_mgr: MemoryManager, store: Store, instance: Instance, ptr: int):
+    def from_wasm(self, mem_mgr: MemoryManager, store: Store, instance: Instance, ptr: int) -> dict:
         raw = mem_mgr.read_with_length_prefix(store, instance, ptr)
         return self.deserialize(raw)
     
-    def wrap_with_length(self, data_bytes: bytes):
+    def wrap_with_length(self, data_bytes: bytes) -> bytes:
         size = len(data_bytes).to_bytes(4, "little")
         return size + data_bytes
     
-    def prepare_input(self, mem_mgr: MemoryManager, store: Store, instance: Instance, data: dict):
+    def prepare_input(self, mem_mgr: MemoryManager, store: Store, instance: Instance, data: dict) -> tuple[int, int]:
         raw = self.serialize(data)
         wrapped = self.wrap_with_length(raw)
         return mem_mgr.write_bytes(store, instance, wrapped)
     
-    def parse_output(self, mem_mgr: MemoryManager, store: Store, instance: Instance, ptr: int):
+    def parse_output(self, mem_mgr: MemoryManager, store: Store, instance: Instance, ptr: int) -> dict:
         raw = mem_mgr.read_with_length_prefix(store, instance, ptr)
         return self.deserialize(raw)
