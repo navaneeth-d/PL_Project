@@ -1,0 +1,4 @@
+.vscode
+host/__pycache__
+plugins/build/
+emsdk
