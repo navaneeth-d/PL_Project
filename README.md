@@ -28,12 +28,11 @@ This allows the system to support **dynamic function dispatch and arbitrary data
 * Dynamic function discovery (`get_functions`)
 * Runtime name-to-ID function mapping for dispatch
 * Support for multiple data types:
-
   * Integers
   * Strings
   * Arrays
   * Null returns
-* Batch execution and safe execution support
+* Safe execution support
 * Modular architecture (loader, runtime, ABI, memory manager, type system)
 
 ---
@@ -121,7 +120,8 @@ rt.get_functions(ctx)
 All calls go through a single entry point:
 
 ```python
-rt.call(ctx, "sumarray", [[1, 2, 3, 4, 5]])
+rt.call(ctx, "sumarray", [1, 2, 3, 4, 5])
+rt.call(ctx, "sumab", 10, 20)
 ```
 
 Internally:

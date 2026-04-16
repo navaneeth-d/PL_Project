@@ -128,8 +128,7 @@ class Runtime:
             ctx = self._resolve_ctx(ctx)
             return self._execute(ctx, func_name, list(args))
         except Exception as e:
-            return {"error": str(e)}
-        
+            return f"[WASM Runtime Error] {e}"
 
     def run(self, path: str, func_name: str, *args):
         module_id = None
