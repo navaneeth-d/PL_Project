@@ -2,7 +2,7 @@
 
 ## Overview
 
-This project implements a **Python-based framework for cross-language interoperability using WebAssembly (WASM)**. It enables programs written in different languages (such as C/C++ and Rust) to be compiled into WASM modules and executed through a unified runtime.
+This project implements a **Python-based framework for cross-language interoperability using WebAssembly (WASM)**. It enables programs written in different languages (such as C/C++) to be compiled into WASM modules and executed through a unified runtime.
 
 The system abstracts away language-specific differences and provides a **generic, extensible interface** for invoking functions across modules using a common ABI.
 
@@ -22,7 +22,7 @@ This allows the system to support **dynamic function dispatch and arbitrary data
 
 ## Features
 
-* Multi-language plugin architecture (C/C++, Rust)
+* Multi-language plugin architecture (C/C++)
 * Unified runtime for loading and executing modules
 * Generic ABI for function invocation
 * Dynamic function discovery (`get_functions`)
@@ -42,17 +42,18 @@ This allows the system to support **dynamic function dispatch and arbitrary data
 
 ```directory
 .
-├── build.py              # Compiles plugins to WASM (C/C++; Rust path present)
+├── build.py              # Compiles plugins to WASM (C/C++ path present)
 ├── demo.py               # Entry point for running the framework
-├── plugins/              # Source plugins (C, C++, Rust)
-│   ├── trialforc.c
-│   ├── trialforrust.rs
+├── new_plugin.py         # Auto-generate plugin template
+├── plugins/              # Source plugins (C, C++)
+│   ├── example.c
 │   └── build/            # Generated WASM modules
 ├── host/
 │   ├── runtime.py        # High-level execution interface
 │   ├── loader.py         # WASM module loader
 │   ├── abi.py            # ABI validation and invocation
 │   ├── memory.py         # WASM memory management
+│   ├── error.py          # Custom error class
 │   └── typesys.py        # Binary encoding / decoding
 ```
 
@@ -79,12 +80,6 @@ cd emsdk
 ./emsdk activate latest
 ```
 
-### 3. Install rust
-
-```sh
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
-
 ---
 
 ## How It Works
@@ -94,7 +89,6 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 Source files are compiled into WASM modules:
 
 * C/C++ → via Emscripten
-* Rust → via rustc (wasm32 target, compiler path present)
 
 ```sh
 python build.py
@@ -198,7 +192,6 @@ Return payload format (module → host):
 * WebAssembly
 * Wasmtime (runtime)
 * Emscripten (C/C++ → WASM)
-* Rust (wasm32 target)
 * Python (core framework)
 
 ---
