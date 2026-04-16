@@ -122,6 +122,7 @@ class Builder:
                 self.build_cpp(file)
 
             elif file.suffix == ".rs":
+                continue
                 self.build_rust(file)
 
 

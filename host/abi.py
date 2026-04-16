@@ -40,9 +40,9 @@ class ABIManager:
         ptr = fn(store)
         return typesys.from_wasm(memory_mgr, store, instance, ptr)
 
-    def call_function(self, store: Store, instance: Instance, mem_mgr: MemoryManager, typesys: TypeSystem, fn_name: str, args: list) -> callable:
+    def call_function(self, store: Store, instance: Instance, mem_mgr: MemoryManager, typesys: TypeSystem, fn_id: int, args: list) -> callable:
         req = {
-            "function": fn_name,
+            "function": fn_id,
             "args": args
         }
         ptr, size = typesys.to_wasm(mem_mgr, store, instance, req)

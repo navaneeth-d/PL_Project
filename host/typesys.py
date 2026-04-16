@@ -1,33 +1,87 @@
-import json
 from wasmtime import Instance, Store
 from host.memory import MemoryManager
 
 
 class TypeSystem:
-    def serialize(self, data: dict) -> bytes:
-        return json.dumps(data).encode('utf-8')
+    def __init__(self):
+        self.TYPE_INT = 4
+        self.TYPE_INT_ARRAY = 4
+        self.TYPE_STRING = 1
+
+    def encode(self, data: dict) -> bytes:
+        func_id = data["function"]
+        args = data["args"]
+
+        buf = bytearray()
+
+        # write function id
+        buf += func_id.to_bytes(4, "little")
+        
+        # write number of args
+        buf += len(args).to_bytes(4, "little")
+
+        for arg in args:
+            if isinstance(arg, int):
+
+                buf += self.TYPE_INT.to_bytes(4, "little")
+                buf += (1).to_bytes(4, "little")
+                buf += arg.to_bytes(4, "little", signed=True)
+
+            elif isinstance(arg, list):
+                buf += self.TYPE_INT_ARRAY.to_bytes(4, "little")
+                buf += len(arg).to_bytes(4, "little")
+
+                for x in arg:
+                    buf += x.to_bytes(4, "little", signed=True)
+            
+            elif isinstance(arg, str):
+                encoded_str = arg.encode('utf-8')
+                buf += self.TYPE_STRING.to_bytes(4, "little")
+                buf += len(encoded_str).to_bytes(4, "little")
+                buf += encoded_str + b'\x00'
+
+            else:
+                raise ValueError("Unsupported type")
     
-    def deserialize(self, data_bytes: bytes) -> dict:
-        return json.loads(data_bytes.decode('utf-8'))
-    
+        return bytes(buf)
+
+    def decode(self, data: bytes):
+        count = int.from_bytes(data[0:4], "little")
+        item_size = int.from_bytes(data[4:8], "little")
+
+        offset = 8
+
+        if count == 0:
+            return None
+
+        # int
+        if count == 1 and item_size == 4:
+            return int.from_bytes(data[offset:offset+4], "little", signed=True)
+
+        # string (bytes → utf-8)
+        if item_size == 1:
+            raw = data[offset:offset+count]
+            answer = raw.decode("utf-8")
+            return answer
+
+        # int array
+        arr = []
+        for _ in range(count):
+            x = int.from_bytes(data[offset:offset+item_size], "little", signed=True)
+            offset += item_size
+            arr.append(x)
+
+        return arr
+
     def to_wasm(self, mem_mgr: MemoryManager, store: Store, instance: Instance, data: dict) -> tuple[int, int]:
-        raw = self.serialize(data)
+        raw = self.encode(data)
         ptr, size = mem_mgr.write_bytes(store, instance, raw)
         return ptr, size
-    
-    def from_wasm(self, mem_mgr: MemoryManager, store: Store, instance: Instance, ptr: int) -> dict:
+
+    def from_wasm(self, mem_mgr: MemoryManager, store: Store, instance: Instance, ptr: int) -> int | str | list[int] | None:
         raw = mem_mgr.read_with_length_prefix(store, instance, ptr)
-        return self.deserialize(raw)
-    
+        return self.decode(raw)
+
     def wrap_with_length(self, data_bytes: bytes) -> bytes:
         size = len(data_bytes).to_bytes(4, "little")
         return size + data_bytes
-    
-    def prepare_input(self, mem_mgr: MemoryManager, store: Store, instance: Instance, data: dict) -> tuple[int, int]:
-        raw = self.serialize(data)
-        wrapped = self.wrap_with_length(raw)
-        return mem_mgr.write_bytes(store, instance, wrapped)
-    
-    def parse_output(self, mem_mgr: MemoryManager, store: Store, instance: Instance, ptr: int) -> dict:
-        raw = mem_mgr.read_with_length_prefix(store, instance, ptr)
-        return self.deserialize(raw)

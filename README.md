@@ -14,7 +14,7 @@ Instead of directly calling functions with fixed signatures, this framework uses
 
 * Linear memory (shared buffer)
 * Byte-level data exchange
-* JSON-based serialization
+* Binary argument/result encoding
 
 This allows the system to support **dynamic function dispatch and arbitrary data types**.
 
@@ -22,16 +22,17 @@ This allows the system to support **dynamic function dispatch and arbitrary data
 
 ## Features
 
-* Multi-language support (C/C++, Rust → WASM)
+* Multi-language plugin architecture (C/C++, Rust)
 * Unified runtime for loading and executing modules
 * Generic ABI for function invocation
 * Dynamic function discovery (`get_functions`)
+* Runtime name-to-ID function mapping for dispatch
 * Support for multiple data types:
 
   * Integers
   * Strings
   * Arrays
-  * Nested objects
+  * Null returns
 * Batch execution and safe execution support
 * Modular architecture (loader, runtime, ABI, memory manager, type system)
 
@@ -41,18 +42,18 @@ This allows the system to support **dynamic function dispatch and arbitrary data
 
 ```directory
 .
-├── build.py              # Compiles C/C++ and Rust to WASM
-├── main.py               # Entry point for running the framework
+├── build.py              # Compiles plugins to WASM (C/C++; Rust path present)
+├── demo.py               # Entry point for running the framework
 ├── plugins/              # Source plugins (C, C++, Rust)
-│   ├── multi.c
-│   ├── rust.rs
+│   ├── trialforc.c
+│   ├── trialforrust.rs
 │   └── build/            # Generated WASM modules
 ├── host/
 │   ├── runtime.py        # High-level execution interface
 │   ├── loader.py         # WASM module loader
 │   ├── abi.py            # ABI validation and invocation
 │   ├── memory.py         # WASM memory management
-│   └── typesys.py        # Serialization / deserialization
+│   └── typesys.py        # Binary encoding / decoding
 ```
 
 ---
@@ -93,7 +94,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 Source files are compiled into WASM modules:
 
 * C/C++ → via Emscripten
-* Rust → via rustc (wasm32 target)
+* Rust → via rustc (wasm32 target, compiler path present)
 
 ```sh
 python build.py
@@ -126,16 +127,17 @@ rt.get_functions(ctx)
 All calls go through a single entry point:
 
 ```python
-rt.call(ctx, "sum", [1, 2, 3])
+rt.call(ctx, "sumarray", [[1, 2, 3, 4, 5]])
 ```
 
 Internally:
 
-1. Arguments are serialized to JSON
-2. Written into WASM memory
-3. `call_function` is invoked
-4. Result is returned as JSON
-5. Deserialized into Python
+1. Function metadata is loaded and mapped by name
+2. Function name is resolved to function ID
+3. Arguments are encoded into a binary payload
+4. Written into WASM memory
+5. `call_function` is invoked
+6. Binary result is decoded into Python values
 
 ---
 
@@ -148,15 +150,32 @@ Each WASM module must export the following functions:
 * `malloc(size)` – allocate memory
 * `free(ptr)` – free memory
 * `call_function(ptr, len)` – main dispatcher
-* `get_functions()` – return available functions
+* `get_functions()` – return function metadata including IDs and signatures
+
+Input payload format (host → module):
+
+1. `function_id` (4 bytes)
+2. `num_args` (4 bytes)
+3. For each argument:
+
+    * `item_size` (4 bytes)
+    * `item_count` (4 bytes)
+    * raw argument bytes
+
+Return payload format (module → host):
+
+1. `total_length` (4 bytes)
+2. `item_count` (4 bytes)
+3. `item_size` (4 bytes)
+4. raw result bytes
 
 ---
 
 ## Limitations
 
-* Performance overhead due to JSON serialization
+* Current binary protocol supports only int, string, int array, and null patterns used by the sample plugins
 * No static type safety (runtime errors possible)
-* Manual parsing in plugins (basic implementation)
+* Plugin and host protocol versions must stay aligned
 * Memory leaks possible if not handled carefully
 * Limited debugging visibility inside WASM
 * Not optimized for high-performance workloads
@@ -165,7 +184,7 @@ Each WASM module must export the following functions:
 
 ## Future Improvements
 
-* Replace JSON with binary serialization (for speed)
+* Extend binary protocol with richer and versioned type descriptors
 * Introduce typed ABI for stronger guarantees
 * Automatic wrapper/code generation for plugins
 * Proper memory management (no leaks)
