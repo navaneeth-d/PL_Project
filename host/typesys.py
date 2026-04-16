@@ -1,4 +1,5 @@
 from wasmtime import Instance, Store
+from host.error import WASMRuntimeError
 from host.memory import MemoryManager
 
 
@@ -8,7 +9,8 @@ class TypeSystem:
         self.TYPE_INT_ARRAY = 4
         self.TYPE_STRING = 1
 
-    def encode(self, data: dict) -> bytes:
+    
+    def encode(self, data: dict):
         func_id = data["function"]
         args = data["args"]
 
@@ -41,10 +43,11 @@ class TypeSystem:
                 buf += encoded_str + b'\x00'
 
             else:
-                raise ValueError("Unsupported type")
+                raise WASMRuntimeError(f"Unsupported type: {type(arg)}")
     
         return bytes(buf)
 
+    
     def decode(self, data: bytes):
         count = int.from_bytes(data[0:4], "little")
         item_size = int.from_bytes(data[4:8], "little")
@@ -73,15 +76,18 @@ class TypeSystem:
 
         return arr
 
-    def to_wasm(self, mem_mgr: MemoryManager, store: Store, instance: Instance, data: dict) -> tuple[int, int]:
+    
+    def to_wasm(self, mem_mgr: MemoryManager, store: Store, instance: Instance, data: dict):
         raw = self.encode(data)
-        ptr, size = mem_mgr.write_bytes(store, instance, raw)
-        return ptr, size
+        return mem_mgr.write_bytes(store, instance, raw)
 
-    def from_wasm(self, mem_mgr: MemoryManager, store: Store, instance: Instance, ptr: int) -> int | str | list[int] | None:
+
+    
+    def from_wasm(self, mem_mgr: MemoryManager, store: Store, instance: Instance, ptr: int):
         raw = mem_mgr.read_with_length_prefix(store, instance, ptr)
         return self.decode(raw)
 
+    
     def wrap_with_length(self, data_bytes: bytes) -> bytes:
         size = len(data_bytes).to_bytes(4, "little")
         return size + data_bytes

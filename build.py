@@ -33,7 +33,7 @@ class Builder:
             return env
 
         except Exception as e:
-            print("⚠️ Failed to load Emscripten environment")
+            print("Failed to load Emscripten environment")
             print(e)
             print("Make sure emsdk is installed and path is correct")
             return os.environ.copy()
@@ -46,7 +46,7 @@ class Builder:
             cmd,
             capture_output=True,
             text=True,
-            env=self.env   # ✅ critical fix
+            env=self.env 
         )
 
         if result.returncode != 0:
@@ -64,7 +64,7 @@ class Builder:
             "emcc",
             str(file_path),
             "-o", str(output),
-            "--no-entry",   # ✅ FIX
+            "--no-entry",
             "-s", "STANDALONE_WASM",
             "-s", "EXPORT_ALL=1",
             "-s", "EXPORTED_FUNCTIONS=_malloc,_free,_init,_cleanup,_call_function,_get_functions"
@@ -73,40 +73,6 @@ class Builder:
         self.run_cmd(cmd)
         print(f"[C] Built: {output}")
 
-    # ---------- C++ ----------
-    def build_cpp(self, file_path):
-        file_path = Path(file_path)
-        output = self.build_dir / (file_path.stem + ".wasm")
-
-        cmd = [
-            "em++",
-            str(file_path),
-            "-o", str(output),
-            "-s", "STANDALONE_WASM",
-            "-s", "EXPORT_ALL=1",
-            "-s", "EXPORTED_FUNCTIONS=_malloc,_free,_init,_cleanup,_call_function,_get_functions"
-        ]
-
-        self.run_cmd(cmd)
-        print(f"[C++] Built: {output}")
-
-    # ---------- Rust ----------
-    def build_rust(self, file_path):
-        file_path = Path(file_path)
-        output = self.build_dir / (file_path.stem + ".wasm")
-
-        cmd = [
-            "rustc",
-            "--target", "wasm32-unknown-unknown",
-            "--crate-type=cdylib",   # ✅ FIX
-            "-O",
-            str(file_path),
-            "-o", str(output),
-            "-C", "link-arg=--export=memory"
-        ]
-
-        self.run_cmd(cmd)
-        print(f"[Rust] Built: {output}")
         
     # ---------- BUILD ALL ----------
     def build_all(self):
@@ -118,12 +84,6 @@ class Builder:
             if file.suffix == ".c":
                 self.build_c(file)
 
-            elif file.suffix == ".cpp":
-                self.build_cpp(file)
-
-            elif file.suffix == ".rs":
-                continue
-                self.build_rust(file)
 
 
 if __name__ == "__main__":

@@ -6,18 +6,22 @@ class Loader():
         self.engine = Engine()
         self.linker = Linker(self.engine)
 
-    def load_module(self, path: str) -> Module:
+    
+    def load_module(self, path: str):
         module = Module.from_file(self.engine, path)
         return module
     
-    def create_store(self) -> Store:
+    
+    def create_store(self):
         return Store(self.engine)
     
-    def instantiate(self, store: Store, module: Module) -> Instance:
+    
+    def instantiate(self, store: Store, module: Module):
         instance = self.linker.instantiate(store, module)
         return instance
     
-    def load(self, path: str) -> dict[str, any]:
+    
+    def load(self, path: str):
         module = self.load_module(path)
         store = self.create_store()
 

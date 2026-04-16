@@ -1,0 +1,2 @@
+class WASMRuntimeError(Exception):
+    pass

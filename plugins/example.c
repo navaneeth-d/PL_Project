@@ -1,21 +1,25 @@
 /*
-Schemas:
+============================= CONTRACT / SCHEMA ==============================
 
-    Receive data:
-        [func_id:4]
-        [num_args:4]
+Receive data layout:
 
-        For each arg:
-            [size of each element:any]       # e.g. int=4 int_array=4 string=1
-            [number of elements:any]         # number of elements (not bytes)
-            [data: ...]                      # raw bytes
+    [func_id:4]
+    [num_args:4]
+
+    For each arg:
+        [item_size:4]        // size of each element (e.g. int=4, char=1)
+        [item_count:4]       // number of elements
+        [data: ...]          // raw bytes
 
 
-    Return data:
-        [total_length:4]    # total length of the response (including this header)
-        [num_items:4]       # number of items in the response (e.g. number of strings)
-        [item_length:4]     # length of this item in bytes
-        [item_data: ...]    # raw bytes of the item
+Return data layout:
+
+    [total_length:4]         // total bytes including header
+    [num_items:4]            // number of items
+    [item_size:4]            // size of each item
+    [data: ...]              // raw bytes
+
+==============================================================================
 */
 
 #include <stdlib.h>
@@ -25,26 +29,44 @@ Schemas:
 #define EXPORT(name) __attribute__((export_name(name)))
 typedef void *(*FuncPtr)(void *data, int num_args);
 
-// ===== init / cleanup =====
+// !===== REQUIRED: lifecycle =====
 EXPORT("init")
 void init() {}
+
 EXPORT("cleanup")
 void cleanup() {}
 
-// ===== helper =====
-// This is only for demonstration purposes. You are free to write your own memory allocation code to return the data
-void *make_response(int count_of_items, int each_item_size, void *result)
+// !===== REQUIRED: response helper (example implementation) =====
+void *make_response(int count, int item_size, void *data)
 {
-    int len = each_item_size * count_of_items + 12;
-    char *ptr = (char *)malloc(len);
-    memcpy(ptr, &len, 4);
-    memcpy(ptr + 4, &count_of_items, 4);
-    memcpy(ptr + 8, &each_item_size, 4);
-    memcpy(ptr + 12, result, each_item_size * count_of_items);
+    int total = 12 + (count * item_size);
+    char *ptr = (char *)malloc(total);
+
+    memcpy(ptr, &total, 4);
+    memcpy(ptr + 4, &count, 4);
+    memcpy(ptr + 8, &item_size, 4);
+    memcpy(ptr + 12, data, count * item_size);
+
     return ptr;
 }
 
-// ===== metadata =====
+// !===== REQUIRED: metadata =====
+/*
+Return JSON describing available functions.
+
+Expected format:
+
+{
+  "functions": [
+    {
+      "id": int,
+      "name": string,
+      "args": string,
+      "return": string
+    }
+  ]
+}
+*/
 EXPORT("get_functions")
 void *get_functions()
 {
@@ -60,7 +82,15 @@ void *get_functions()
     return make_response(strlen(response), 1, response);
 }
 
-// ===== helpers =====
+// !===== USER FUNCTIONS =====
+/*
+Each function receives:
+    data     → pointer to encoded arguments
+    num_args → number of arguments
+
+Must return:
+    pointer to response buffer (see schema above)
+*/
 void *sumarray(void *data, int num_args)
 {
     int sum = 0;
@@ -125,11 +155,12 @@ void *greet(void *data, int num_args)
     char *name = (char *)malloc(size * num_elements);
     memcpy(name, data + 8, size * num_elements);
 
-    char greeting[100];
-    snprintf(greeting, sizeof(greeting), "Hello, %s!", name);
+    char *greeting = (char *)malloc(size * num_elements + 8);
+    snprintf(greeting, size * num_elements + 8, "Hello, %s!", name);
 
     void *res = make_response(strlen(greeting), 1, greeting);
     free(name);
+    free(greeting);
     return res;
 }
 
@@ -145,7 +176,12 @@ int number_of_args(void *data)
     return num_args;
 }
 
-// ===== dispatcher =====
+// !===== REQUIRED: dispatcher =====
+/*
+- Reads function ID
+- Dispatches to correct function
+- Must return valid response buffer
+*/
 EXPORT("call_function")
 void *call_function(void *ptr, int len)
 {
