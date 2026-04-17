@@ -29,13 +29,13 @@ class ABIManager:
         exports = instance.exports(store)
         for fn in self.reqd_fns:
             if fn not in exports:
-                raise WASMRuntimeError(f"Missing required function")
+                raise WASMRuntimeError(f"Missing required function: {fn}")
     
 
     def get_function(self, store: Store, instance: Instance, name: str):
         exports = instance.exports(store)
         if name not in exports:
-            raise WASMRuntimeError(f"Missing required function")
+            raise WASMRuntimeError(f"Missing required function: {name}")
         return exports[name]
     
 

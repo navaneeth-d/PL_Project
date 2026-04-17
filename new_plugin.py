@@ -1,6 +1,10 @@
 from pathlib import Path
+import re
 
 def make_c_plugin(plugin_name: str) ->None:
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", plugin_name):
+        raise ValueError("Plugin name must be a valid C identifier-style name")
+
     template = r"""/*
 ============================= CONTRACT / SCHEMA ==============================
 
@@ -128,7 +132,7 @@ void *call_function(void *ptr, int len)
     PLUGIN_DIR = Path("plugins")
     PLUGIN_DIR.mkdir(exist_ok=True)
     plugin_path = PLUGIN_DIR / f"{plugin_name}.c"
-    with open(plugin_path, "w") as f:
+    with open(plugin_path, "w", encoding="utf-8") as f:
         f.write(template)
 
 

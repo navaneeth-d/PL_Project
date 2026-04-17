@@ -24,22 +24,29 @@ class TypeSystem:
 
         for arg in args:
             if isinstance(arg, int):
+                if arg < -(2**31) or arg > (2**31 - 1):
+                    raise WASMRuntimeError("int argument out of 32-bit signed range")
 
                 buf += self.TYPE_INT.to_bytes(4, "little")
                 buf += (1).to_bytes(4, "little")
                 buf += arg.to_bytes(4, "little", signed=True)
 
             elif isinstance(arg, list):
+                if any(not isinstance(x, int) for x in arg):
+                    raise WASMRuntimeError("list arguments must contain only integers")
                 buf += self.TYPE_INT_ARRAY.to_bytes(4, "little")
                 buf += len(arg).to_bytes(4, "little")
 
                 for x in arg:
+                    if x < -(2**31) or x > (2**31 - 1):
+                        raise WASMRuntimeError("list int argument out of 32-bit signed range")
                     buf += x.to_bytes(4, "little", signed=True)
             
             elif isinstance(arg, str):
                 encoded_str = arg.encode('utf-8')
                 buf += self.TYPE_STRING.to_bytes(4, "little")
-                buf += len(encoded_str).to_bytes(4, "little")
+                # Include the null terminator in item_count for C-string consumers.
+                buf += (len(encoded_str) + 1).to_bytes(4, "little")
                 buf += encoded_str + b'\x00'
 
             else:
@@ -49,6 +56,9 @@ class TypeSystem:
 
     
     def decode(self, data: bytes):
+        if len(data) < 8:
+            raise WASMRuntimeError("Invalid response payload")
+
         count = int.from_bytes(data[0:4], "little")
         item_size = int.from_bytes(data[4:8], "little")
 
@@ -64,7 +74,7 @@ class TypeSystem:
         # string (bytes → utf-8)
         if item_size == 1:
             raw = data[offset:offset+count]
-            answer = raw.decode("utf-8")
+            answer = raw.rstrip(b"\x00").decode("utf-8")
             return answer
 
         # int array
@@ -85,6 +95,8 @@ class TypeSystem:
     
     def from_wasm(self, mem_mgr: MemoryManager, store: Store, instance: Instance, ptr: int):
         raw = mem_mgr.read_with_length_prefix(store, instance, ptr)
+        if raw is None:
+            return None
         return self.decode(raw)
 
     

@@ -40,3 +40,7 @@ if __name__ == "__main__":
     print("\n[C] Calling function after unloading module:")
     res = rt.call(ctx, "sumab", 10, 20)
     print(f"Result: {res}")
+
+    print("\n[C] Running without loading the module:")
+    res = rt.run('plugins/build/example.wasm', "sumab", 100, 20)
+    print(f"Result: {res}")

@@ -152,8 +152,9 @@ void *greet(void *data, int num_args)
     memcpy(&size, data, 4);
     memcpy(&num_elements, data + 4, 4);
 
-    char *name = (char *)malloc(size * num_elements);
+    char *name = (char *)malloc((size * num_elements) + 1);
     memcpy(name, data + 8, size * num_elements);
+    name[size * num_elements] = '\0';
 
     char *greeting = (char *)malloc(size * num_elements + 8);
     snprintf(greeting, size * num_elements + 8, "Hello, %s!", name);
