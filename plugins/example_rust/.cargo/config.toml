@@ -1,0 +1,9 @@
+[target.wasm32-unknown-unknown]
+rustflags = [
+    "-C", "link-arg=--export=init",
+    "-C", "link-arg=--export=cleanup",
+    "-C", "link-arg=--export=malloc",
+    "-C", "link-arg=--export=free",
+    "-C", "link-arg=--export=get_functions",
+    "-C", "link-arg=--export=call_function",
+]

@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -38,22 +39,21 @@ class Builder:
             print("Make sure emsdk is installed and path is correct")
             return os.environ.copy()
 
-    # ---------- COMMAND RUNNER ----------
-    def run_cmd(self, cmd):
+    def run_cmd(self, cmd, cwd=None, env=None):
         print(f"\n>> {' '.join(cmd)}")
-
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            env=self.env 
+            cwd=cwd,
+            env=env or self.env
         )
-
         if result.returncode != 0:
             print(result.stderr)
             raise Exception("Build failed")
         else:
             print(result.stdout)
+
 
     # ---------- C ----------
     def build_c(self, file_path):
@@ -73,16 +73,49 @@ class Builder:
         self.run_cmd(cmd)
         print(f"[C] Built: {output}")
 
-        
-    # ---------- BUILD ALL ----------
+    
+    # ---------- RUST ----------
+    def build_rust(self, crate_dir):
+        """
+        Detect a Rust crate by the presence of Cargo.toml inside a plugins/ subdirectory.
+        Run: cargo build --target wasm32-unknown-unknown --release
+        Then copy the .wasm output into plugins/build/
+        """
+        crate_dir = Path(crate_dir)
+        crate_name = crate_dir.name  # e.g. "example_rust"
+        print(f"\n[Rust] Building crate: {crate_name}")
+        cmd = [
+            "cargo", "build",
+            "--target", "wasm32-unknown-unknown",
+            "--release"
+        ]
+        # Cargo needs to run from inside the crate directory
+        # Use plain os.environ so cargo uses the system PATH (not emscripten's env)
+        self.run_cmd(cmd, cwd=str(crate_dir), env=os.environ.copy())
+        # Cargo outputs to: <crate>/target/wasm32-unknown-unknown/release/<name>.wasm
+        wasm_src = (
+            crate_dir
+            / "target"
+            / "wasm32-unknown-unknown"
+            / "release"
+            / f"{crate_name}.wasm"
+        )
+        wasm_dst = self.build_dir / f"{crate_name}.wasm"
+        shutil.copy2(wasm_src, wasm_dst)
+        print(f"[Rust] Built: {wasm_dst}")
+
     def build_all(self):
         for file in self.base_dir.iterdir():
 
-            if file.is_dir():
+            if file.name == "build":       # skip output dir
                 continue
 
-            if file.suffix == ".c":
+            if file.is_file() and file.suffix == ".c":
                 self.build_c(file)
+
+            if file.is_dir() and (file / "Cargo.toml").exists():   # ← Rust
+                self.build_rust(file)
+
 
 
 

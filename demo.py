@@ -7,6 +7,7 @@ if __name__ == "__main__":
 
     ctx = rt.load_module("plugins/build/example.wasm")
 
+    # ── C PLUGIN ──────────────────────────────────────────
     print("\n[C] Plugin Functions")
     print(rt.get_functions(ctx))
 
@@ -44,3 +45,27 @@ if __name__ == "__main__":
     print("\n[C] Running without loading the module:")
     res = rt.run('plugins/build/example.wasm', "sumab", 100, 20)
     print(f"Result: {res}")
+   
+    # ── RUST PLUGIN ──────────────────────────────────────────
+    rust_ctx = rt.load_module("plugins/build/example_rust.wasm")
+
+    print("\n[Rust] Plugin Functions")
+    print(rt.get_functions(rust_ctx))
+
+    print("\n[Rust] factorial(10):")
+    res = rt.call(rust_ctx, "factorial", 10)
+    print(f"Result: {res}")
+
+    print("\n[Rust] fibonacci(15):")
+    res = rt.call(rust_ctx, "fibonacci", 15)
+    print(f"Result: {res}")
+
+    print("\n[Rust] is_prime(97):")
+    res = rt.call(rust_ctx, "is_prime", 97)
+    print(f"Result: {res}  (1 = prime, 0 = not prime)")
+
+    print("\n[Rust] is_prime(100):")
+    res = rt.call(rust_ctx, "is_prime", 100)
+    print(f"Result: {res}  (1 = prime, 0 = not prime)")
+
+    rt.unload_module(rust_ctx)
