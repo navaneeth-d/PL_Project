@@ -68,4 +68,18 @@ if __name__ == "__main__":
     res = rt.call(rust_ctx, "is_prime", 100)
     print(f"Result: {res}  (1 = prime, 0 = not prime)")
 
+    print("\n[Rust] Greeting:")
+    name = input('Enter your name for Rust: ')
+    res = rt.call(rust_ctx, "greet", name)
+    print(f"Greeting: {res}")
+
+    print("\n[Rust] Function with no return:")
+    res = rt.call(rust_ctx, "noReturn")
+    print(f"Result: {res}")
+
+    print("\n[Rust] Number of args passed (expected 3):")
+    res = rt.call(rust_ctx, "num_of_args", "A", "B", "C")
+    print(f"Result: {res}")
+
+
     rt.unload_module(rust_ctx)
