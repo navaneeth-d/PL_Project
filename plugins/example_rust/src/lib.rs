@@ -78,41 +78,79 @@ pub extern "C" fn get_functions() -> *mut u8 {
     let json = br#"{"functions": [
         {"id": 1, "name": "factorial", "args": "[int]", "return": "int"},
         {"id": 2, "name": "fibonacci", "args": "[int]", "return": "int"},
-        {"id": 3, "name": "is_prime",  "args": "[int]", "return": "int"}
+        {"id": 3, "name": "is_prime",  "args": "[int]", "return": "int"},
+        {"id": 4, "name": "greet",     "args": "[string]", "return": "string"},
+        {"id": 5, "name": "noReturn",  "args": "[]", "return": "null"},
+        {"id": 6, "name": "num_of_args", "args": "[int, int]", "return": "int"}
     ]}"#;
     
     create_response(json.len() as i32, 1, json)
 }
+
 
 #[no_mangle]
 pub extern "C" fn call_function(ptr: *mut u8, _len: i32) -> *mut u8 {
     if ptr.is_null() { return ptr; }
 
     unsafe {
-        // Read the header values using native Rust byte conversion
+        // Read func_id
         let header = slice::from_raw_parts(ptr, 8);
         let func_id = i32::from_le_bytes(header[0..4].try_into().unwrap_or([0; 4]));
         
-        // Extract the first argument (at offset 16 to skip item_size and item_count)
-        let arg_bytes = slice::from_raw_parts(ptr.add(16), 4);
-        let n = i32::from_le_bytes(arg_bytes.try_into().unwrap_or([0; 4]));
+        // Read num_args (it's the 4 bytes immediately after func_id)
+        let num_args = i32::from_le_bytes(header[4..8].try_into().unwrap_or([0; 4]));
 
         match func_id {
-            1 => {
-                let res = (1..=n).fold(1i32, |acc, i| acc.saturating_mul(i));
-                create_response(1, 4, &res.to_le_bytes())
+            1 | 2 | 3 => {
+                // For math functions, extract the first integer argument at offset 16
+                let arg_bytes = slice::from_raw_parts(ptr.add(16), 4);
+                let n = i32::from_le_bytes(arg_bytes.try_into().unwrap_or([0; 4]));
+                
+                match func_id {
+                    1 => {
+                        let res = (1..=n).fold(1i32, |acc, i| acc.saturating_mul(i));
+                        create_response(1, 4, &res.to_le_bytes())
+                    }
+                    2 => {
+                        let mut a: (i32, i32) = (0, 1);
+                        for _ in 0..n { a = (a.1, a.0.saturating_add(a.1)); }
+                        create_response(1, 4, &a.0.to_le_bytes())
+                    }
+                    3 => {
+                        let is_p = if n < 2 { 0 } else { 
+                            (2..n).take_while(|i| i * i <= n).all(|i| n % i != 0) as i32 
+                        };
+                        create_response(1, 4, &is_p.to_le_bytes())
+                    }
+                    _ => ptr::null_mut()
+                }
             }
-            2 => {
-                let mut a: (i32, i32) = (0, 1);
-
-                for _ in 0..n { a = (a.1, a.0.saturating_add(a.1)); }
-                create_response(1, 4, &a.0.to_le_bytes())
+            4 => { // greet
+                // String payload has: [item_size:4][item_count:4][bytes...]
+                let arg_header = slice::from_raw_parts(ptr.add(8), 8);
+                let item_size = i32::from_le_bytes(arg_header[0..4].try_into().unwrap_or([0; 4])) as usize;
+                let item_count = i32::from_le_bytes(arg_header[4..8].try_into().unwrap_or([0; 4])) as usize;
+                
+                let str_bytes = slice::from_raw_parts(ptr.add(16), item_size * item_count);
+                
+                // Build "Hello, {name}!" using a stack buffer (since we have no_std/no allocations)
+                let mut buf = [0u8; 128]; 
+                let mut len = 0;
+                
+                for &b in b"Hello, " { buf[len] = b; len += 1; }
+                for &b in str_bytes { 
+                    if len < buf.len() - 1 { buf[len] = b; len += 1; } 
+                }
+                buf[len] = b'!'; len += 1;
+                
+                create_response(len as i32, 1, &buf[0..len])
             }
-            3 => {
-                let is_p = if n < 2 { 0 } else { 
-                    (2..n).take_while(|i| i * i <= n).all(|i| n % i != 0) as i32 
-                };
-                create_response(1, 4, &is_p.to_le_bytes())
+            5 => { // noReturn
+                ptr::null_mut()
+            }
+            6 => { // num_of_args
+                // Returns the total number of arguments passed in the WASM payload
+                create_response(1, 4, &num_args.to_le_bytes())
             }
             _ => {
                 let msg = b"Function not found";
