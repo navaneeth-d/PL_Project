@@ -5,12 +5,15 @@ from host.memory import MemoryManager
 
 class TypeSystem:
     def __init__(self):
-        self.TYPE_INT = 4
-        self.TYPE_INT_ARRAY = 4
-        self.TYPE_STRING = 1
+        self._SIZE_INT = 4
+        self._SIZE_INT_ARRAY = 4
+        self._SIZE_STRING = 1
 
     
     def encode(self, data: dict):
+        if "function" not in data or "args" not in data:
+            raise WASMRuntimeError("Data must contain 'function' and 'args' keys")
+        
         func_id = data["function"]
         args = data["args"]
 
@@ -22,31 +25,47 @@ class TypeSystem:
         # write number of args
         buf += len(args).to_bytes(4, "little")
 
+        def _safe_int(x):
+            if x < -(2**31) or x > (2**31 - 1):
+                raise WASMRuntimeError("int argument out of 32-bit signed range")
+            return x.to_bytes(4, "little", signed=True)
+
         for arg in args:
             if isinstance(arg, int):
-                if arg < -(2**31) or arg > (2**31 - 1):
-                    raise WASMRuntimeError("int argument out of 32-bit signed range")
+                # write size of the int
+                buf += self._SIZE_INT.to_bytes(4, "little")
 
-                buf += self.TYPE_INT.to_bytes(4, "little")
+                # write count (1 for single int)
                 buf += (1).to_bytes(4, "little")
-                buf += arg.to_bytes(4, "little", signed=True)
+
+                #write the int value
+                buf += _safe_int(arg)
 
             elif isinstance(arg, list):
                 if any(not isinstance(x, int) for x in arg):
                     raise WASMRuntimeError("list arguments must contain only integers")
-                buf += self.TYPE_INT_ARRAY.to_bytes(4, "little")
+            
+                # write size of each int in the array
+                buf += self._SIZE_INT_ARRAY.to_bytes(4, "little")
+                
+                # write count (number of ints in the array)
                 buf += len(arg).to_bytes(4, "little")
 
+                # write each int value
                 for x in arg:
-                    if x < -(2**31) or x > (2**31 - 1):
-                        raise WASMRuntimeError("list int argument out of 32-bit signed range")
-                    buf += x.to_bytes(4, "little", signed=True)
+                    buf += _safe_int(x)
             
             elif isinstance(arg, str):
+                # write size of each byte in the string (1 for utf-8)
                 encoded_str = arg.encode('utf-8')
-                buf += self.TYPE_STRING.to_bytes(4, "little")
-                # Include the null terminator in item_count for C-string consumers.
+
+                # write count (number of bytes in the encoded string + 1 for null terminator)
+                buf += self._SIZE_STRING.to_bytes(4, "little")
+
+                # write the string bytes followed by a null terminator
                 buf += (len(encoded_str) + 1).to_bytes(4, "little")
+
+                # write the string bytes followed by a null terminator
                 buf += encoded_str + b'\x00'
 
             else:

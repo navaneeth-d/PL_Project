@@ -1,4 +1,4 @@
-from wasmtime import Engine, Instance, Linker, Module, Store
+from wasmtime import Engine, Linker, Module, Store
 
 
 class Loader():
