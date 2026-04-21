@@ -5,7 +5,7 @@ if __name__ == "__main__":
 
     rt = Runtime()
 
-    ctx = rt.load_module("plugins/build/example.wasm")
+    ctx = rt.load_module("plugins/build/example_c.wasm")
 
     # ── C PLUGIN ──────────────────────────────────────────
     print("\n[C] Plugin Functions")
@@ -80,8 +80,8 @@ if __name__ == "__main__":
     res = rt.call(rust_ctx, "noReturn")
     print(f"Result: {res}")
 
-    print("\n[Rust] Number of args passed (expected 3):")
-    res = rt.call(rust_ctx, "num_of_args", "A", "B", "C")
+    print("\n[Rust] Number of args passed (expected 2):")
+    res = rt.call(rust_ctx, "num_of_args", 1, 2)
     print(f"Result: {res}")
 
 

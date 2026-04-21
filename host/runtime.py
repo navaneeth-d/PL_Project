@@ -23,24 +23,23 @@ class Runtime:
             return self._contexts[ctx]
         raise WASMRuntimeError(f"Unknown module id: {ctx}")
 
-
-    def _encode_module_id(self, path: str) -> str:
-        import base64
-        return base64.b64encode(path.encode('utf-8')).decode('utf-8')
-
     
     def _next_module_id(self, path: str) -> str:
+        def _encode_module_id(path: str) -> str:
+            import base64
+            return base64.b64encode(path.encode('utf-8')).decode('utf-8')
+        
         if path not in self._contexts:
-            return self._encode_module_id(path)
-
+            return _encode_module_id(path)
+        
         idx = 2
         while f"{path}#{idx}" in self._contexts:
             idx += 1
-        return self._encode_module_id(f"{path}#{idx}")
+        return _encode_module_id(f"{path}#{idx}")
 
 
-    def _validate_functions(self, fn_map: dict[str, dict[str, any]]):
-        for item in fn_map:
+    def _validate_metadata(self, ctx: dict[str, any], fns: dict[str, dict[str, any]]):
+        for item in fns:
             if 'name' not in item or 'id' not in item or 'args' not in item or 'return' not in item:
                 raise WASMRuntimeError(f"Function(s) in metadata is missing required fields")
             
@@ -54,6 +53,14 @@ class Runtime:
             
             if not item['return'] in ("int", "string", "null", "list[int]"):
                 raise WASMRuntimeError(f"Function {fn_name} has invalid return type")
+            
+        self._abi.validate_function_calls(
+            ctx['store'], 
+            ctx['instance'], 
+            self._mem_mgr, 
+            self._typesys, 
+            fns
+        )
 
 
     def _load_functions(self, ctx: dict[str, any]):
@@ -68,14 +75,11 @@ class Runtime:
             self._typesys
         )
         
-        fn_json = json.loads(fn_str)
-
-        self._validate_functions(fn_json['functions'])
-        self._abi.validate_functions(ctx['store'], ctx['instance'], self._mem_mgr, self._typesys, fn_json['functions'])
-
+        metadata = json.loads(fn_str)
+        self._validate_metadata(ctx, metadata['functions'])
         self._fn_map[module_id] = {}
         
-        for fn in fn_json['functions']:
+        for fn in metadata['functions']:
             self._fn_map[module_id][fn["name"]] = fn
 
 
@@ -91,18 +95,21 @@ class Runtime:
         self._abi.call_init(store, instance)
         
         self._load_functions(ctx)
-        
         self._contexts[module_id] = ctx
+
+        print(ctx)
 
         return module_id
     
 
     def unload_module(self, ctx: str):
         ctx = self._resolve_ctx(ctx)
-        self._cleanup(ctx)
         module_id = ctx['module_id']
+        self._cleanup(ctx)
+
         if module_id in self._fn_map:
             del self._fn_map[module_id]
+
         if module_id in self._contexts:
             del self._contexts[module_id]
 
@@ -134,6 +141,7 @@ class Runtime:
         module_id = ctx['module_id']
         if module_id not in self._fn_map:
             raise WASMRuntimeError(f"{module_id} was not loaded or has no function metadata")
+        
         module_fns = self._fn_map[module_id]
 
         if func_name not in module_fns:
@@ -163,12 +171,15 @@ class Runtime:
             else:
                 raise WASMRuntimeError(f"Argument {i+1} of function {func_name} has an unsupported type")
 
-        return {"function": fn_details['id'], "args": args, 'argspec': expected_args}
+        return {
+            "function": fn_details['id'], 
+            "args": args, 
+            'argspec': expected_args
+        }
     
     
     def _execute(self, ctx: dict[str, any], func_name: str, args: list):
         req = self._resolve_req(ctx, func_name, args)
-
         return self._abi.call_function(
             ctx["store"],
             ctx["instance"],
@@ -184,6 +195,7 @@ class Runtime:
             return self._execute(ctx, func_name, list(args))
         except Exception as e:
             print(traceback.format_exc())
+            
 
     def run(self, path: str, func_name: str, *args):
         module_id = None

@@ -31,8 +31,8 @@ class ABIManager:
             if fn not in exports:
                 raise WASMRuntimeError(f"Missing required function: {fn}")
             
-            
-    def validate_functions(self, store, instance, mem_mgr, typesys, fn_list):
+
+    def validate_function_calls(self, store: Store, instance: Instance, mem_mgr: MemoryManager, typesys: TypeSystem, fn_list: list):
         def _get_dummy_args(argspec):
             dummy_args = []
             for arg in argspec:

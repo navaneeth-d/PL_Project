@@ -11,12 +11,18 @@ class TypeSystem:
 
     
     def encode(self, data: dict):
-        if "function" not in data or "args" not in data:
-            raise WASMRuntimeError("Data must contain 'function' and 'args' keys")
+        if "function" not in data:
+            raise WASMRuntimeError("Data must contain 'function' key")
+        
+        if "args" not in data:
+            raise WASMRuntimeError("Data must contain 'args' key")
+        
+        if "argspec" not in data:
+            raise WASMRuntimeError("Data must contain 'argspec' key")
         
         func_id = data["function"]
         args = data["args"]
-        argspec = data['argspec']
+        argspecs = data['argspec']
 
         buf = bytearray()
 
@@ -26,13 +32,13 @@ class TypeSystem:
         # write number of args
         buf += len(args).to_bytes(4, "little")
 
-        def _safe_int(x):
+        def _safe_int(x: int):
             if x < -(2**31) or x > (2**31 - 1):
                 raise WASMRuntimeError("int argument out of 32-bit signed range")
             return x.to_bytes(4, "little", signed=True)
 
-        for arg in args:
-            if isinstance(arg, int):
+        for arg, argspec in zip(args, argspecs):
+            if argspec == "int":
                 # write size of the int
                 buf += self._SIZE_INT.to_bytes(4, "little")
 
@@ -42,7 +48,7 @@ class TypeSystem:
                 #write the int value
                 buf += _safe_int(arg)
 
-            elif isinstance(arg, list):
+            elif argspec == "list[int]":
                 if any(not isinstance(x, int) for x in arg):
                     raise WASMRuntimeError("list arguments must contain only integers")
             
@@ -56,7 +62,7 @@ class TypeSystem:
                 for x in arg:
                     buf += _safe_int(x)
             
-            elif isinstance(arg, str):
+            elif argspec == "string":
                 # write size of each byte in the string (1 for utf-8)
                 encoded_str = arg.encode('utf-8')
 
