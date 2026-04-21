@@ -36,7 +36,7 @@ void init() {}
 EXPORT("cleanup")
 void cleanup() {}
 
-// !===== REQUIRED: response helper (example implementation) =====
+// ===== response helper (example implementation) =====
 void *make_response(int count, int item_size, void *data)
 {
     int total = 12 + (count * item_size);
@@ -72,11 +72,12 @@ void *get_functions()
 {
     char *response = "{"
                      "\"functions\": ["
-                     "{\"id\": 1, \"name\": \"sumarray\", \"args\": \"[list[int]]\", \"return\": \"int\"},"
-                     "{\"id\": 2, \"name\": \"mul\", \"args\": \"[list[int]]\", \"return\": \"int\"},"
-                     "{\"id\": 3, \"name\": \"sumab\", \"args\": \"[int, int]\", \"return\": \"int\"},"
-                     "{\"id\": 4, \"name\": \"greet\", \"args\": \"[string]\", \"return\": \"string\"},"
-                     "{\"id\": 5, \"name\": \"noReturn\", \"args\": \"[]\", \"return\": \"null\"}"
+                     "{\"id\": 1, \"name\": \"sumarray\", \"args\": [\"list[int]\"], \"return\": \"int\"},"
+                     "{\"id\": 2, \"name\": \"mul\", \"args\": [\"list[int]\"], \"return\": \"int\"},"
+                     "{\"id\": 3, \"name\": \"sumab\", \"args\": [\"int\", \"int\"], \"return\": \"int\"},"
+                     "{\"id\": 4, \"name\": \"greet\", \"args\": [\"string\"], \"return\": \"string\"},"
+                     "{\"id\": 5, \"name\": \"noReturn\", \"args\": [], \"return\": \"null\"},"
+                     "{\"id\": 6, \"name\": \"doubleArray\", \"args\": [\"list[int]\"], \"return\": \"list[int]\"}"
                      "]"
                      "}";
     return make_response(strlen(response), 1, response);
@@ -170,6 +171,22 @@ void *noReturn(void *data, int num_args)
     return NULL;
 }
 
+void *doubleArray(void *data, int num_args)
+{
+    int size, num_elements;
+    memcpy(&size, data, 4);
+    memcpy(&num_elements, data + 4, 4);
+
+    int arr[num_elements];
+    memcpy(arr, data + 8, size * num_elements);
+
+    for (int i = 0; i < num_elements; i++)
+    {
+        arr[i] *= 2;
+    }
+    return make_response(num_elements, size, arr);
+}
+
 int number_of_args(void *data)
 {
     int num_args;
@@ -186,7 +203,7 @@ int number_of_args(void *data)
 EXPORT("call_function")
 void *call_function(void *ptr, int len)
 {
-    FuncPtr funcs[] = {sumarray, mul, sumab, greet, noReturn};
+    FuncPtr funcs[] = {sumarray, mul, sumab, greet, noReturn, doubleArray};
     int id;
     memcpy(&id, ptr, 4);
     ptr += 4;
@@ -196,7 +213,7 @@ void *call_function(void *ptr, int len)
     ptr += 4;
     len -= 4;
 
-    if (id < 1 || id > 5)
+    if (id < 1 || id > 6)
     {
         char *error = "Function not found";
         return make_response(strlen(error), 1, error);

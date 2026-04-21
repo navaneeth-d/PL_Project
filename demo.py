@@ -36,6 +36,9 @@ if __name__ == "__main__":
     res = rt.call(ctx, "doesNotExist")
     print(f"Result: {res}")
 
+    print("\n[C] Function Returns array:")
+    
+
     rt.unload_module(ctx)
 
     print("\n[C] Calling function after unloading module:")

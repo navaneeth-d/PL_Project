@@ -25,13 +25,46 @@ class ABIManager:
             raise WASMRuntimeError(f"{fn_name} {e}")
         
         
-    def validate(self, store: Store, instance: Instance):
+    def validate_exports(self, store: Store, instance: Instance):
         exports = instance.exports(store)
         for fn in self.reqd_fns:
             if fn not in exports:
                 raise WASMRuntimeError(f"Missing required function: {fn}")
-    
+            
+            
+    def validate_functions(self, store, instance, mem_mgr, typesys, fn_list):
+        def _get_dummy_args(argspec):
+            dummy_args = []
+            for arg in argspec:
+                if arg == 'list[int]':
+                    dummy_args.append([1, 2, 3])
+                elif arg == 'int':
+                    dummy_args.append(42)
+                elif arg == 'string':
+                    dummy_args.append("test")
+                else:
+                    raise WASMRuntimeError(f"Unsupported argument type: {arg}")
+            return dummy_args
 
+        for fn in fn_list:
+            id, name, argspec, rettype = fn['id'], fn['name'], fn['args'], fn['return']
+            args = _get_dummy_args(argspec)
+            ret = self.call_function(store, instance, mem_mgr, typesys, {
+                "function": id,
+                "argspec": argspec,
+                "args": args
+            })
+
+            if rettype == 'int' and not isinstance(ret, int):
+                raise WASMRuntimeError(f"Function {name} expected to return int but got {type(ret)}")
+            elif rettype == 'string' and not isinstance(ret, str):
+                raise WASMRuntimeError(f"Function {name} expected to return string but got {type(ret)}")
+            elif rettype == 'list[int]' and not (isinstance(ret, list) and all(isinstance(x, int) for x in ret)):
+                raise WASMRuntimeError(f"Function {name} expected to return list[int] but got {type(ret)}")
+            elif rettype == 'null' and ret is not None:
+                raise WASMRuntimeError(f"Function {name} expected to return null but got {type(ret)}")
+        
+    
     def get_function(self, store: Store, instance: Instance, name: str):
         exports = instance.exports(store)
         if name not in exports:
@@ -58,11 +91,7 @@ class ABIManager:
                 memory_mgr.free(store, instance, ptr)
 
 
-    def call_function(self, store: Store, instance: Instance, mem_mgr: MemoryManager, typesys: TypeSystem, fn_id: int, args: list):
-        req = {
-            "function": fn_id,
-            "args": args
-        }
+    def call_function(self, store: Store, instance: Instance, mem_mgr: MemoryManager, typesys: TypeSystem, req: dict[str, any]):
         ptr, size = typesys.to_wasm(mem_mgr, store, instance, req)
         res_ptr = None
         try:

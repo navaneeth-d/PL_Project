@@ -58,7 +58,7 @@ class Builder:
     # ---------- C ----------
     def build_c(self, file_path):
         file_path = Path(file_path)
-        output = self.build_dir / (file_path.stem + ".wasm")
+        output = self.build_dir / (file_path.stem + "_c.wasm")
 
         cmd = [
             "emcc",

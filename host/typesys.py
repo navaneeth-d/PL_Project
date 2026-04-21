@@ -16,6 +16,7 @@ class TypeSystem:
         
         func_id = data["function"]
         args = data["args"]
+        argspec = data['argspec']
 
         buf = bytearray()
 

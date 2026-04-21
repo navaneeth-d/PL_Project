@@ -76,12 +76,12 @@ fn create_response(count: i32, item_size: i32, payload: &[u8]) -> *mut u8 {
 #[no_mangle]
 pub extern "C" fn get_functions() -> *mut u8 {
     let json = br#"{"functions": [
-        {"id": 1, "name": "factorial", "args": "[int]", "return": "int"},
-        {"id": 2, "name": "fibonacci", "args": "[int]", "return": "int"},
-        {"id": 3, "name": "is_prime",  "args": "[int]", "return": "int"},
-        {"id": 4, "name": "greet",     "args": "[string]", "return": "string"},
-        {"id": 5, "name": "noReturn",  "args": "[]", "return": "null"},
-        {"id": 6, "name": "num_of_args", "args": "[int, int]", "return": "int"}
+        {"id": 1, "name": "factorial", "args": ["int"], "return": "int"},
+        {"id": 2, "name": "fibonacci", "args": ["int"], "return": "int"},
+        {"id": 3, "name": "is_prime",  "args": ["int"], "return": "int"},
+        {"id": 4, "name": "greet",     "args": ["string"], "return": "string"},
+        {"id": 5, "name": "noReturn",  "args": [], "return": "null"},
+        {"id": 6, "name": "num_of_args", "args": ["int", "int"], "return": "int"}
     ]}"#;
     
     create_response(json.len() as i32, 1, json)
