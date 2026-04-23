@@ -42,8 +42,6 @@ class ABIManager:
                     dummy_args.append(42)
                 elif arg == 'string':
                     dummy_args.append("test")
-                else:
-                    raise WASMRuntimeError(f"Unsupported argument type: {arg}")
             return dummy_args
 
         for fn in fn_list:

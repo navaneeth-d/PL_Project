@@ -1,6 +1,8 @@
 import traceback
+from typing import Any
 
 from host.abi import ABIManager
+from host.context import Context
 from host.error import WASMRuntimeError
 from host.loader import Loader
 from host.memory import MemoryManager
@@ -14,31 +16,44 @@ class Runtime:
         self._abi = ABIManager()
         self._mem_mgr = MemoryManager()
         self._typesys = TypeSystem()
-        self._fn_map = {}
-        self._contexts = {}
+        self._contexts: dict[str, Context] = {}
+
+    
+    def __getattr__(self, name):
+        def method(ctx: Context | None, *args):
+            return self.call(ctx, name, *args)
+        return method
 
 
-    def _resolve_ctx(self, ctx: str) -> dict[str, any]:
-        if isinstance(ctx, str) and ctx in self._contexts:
-            return self._contexts[ctx]
-        raise WASMRuntimeError(f"Unknown module id: {ctx}")
+    def _resolve_ctx(self, ctx: Context | None, fn_name: str) -> Context:
+        if ctx is None:
+            if len(self._contexts) == 0:
+                raise WASMRuntimeError("No modules loaded")
+            elif len(self._contexts) == 1:
+                ctx = list(self._contexts.values())[0]
+            else:
+                raise WASMRuntimeError(f"Multiple modules loaded, context must be specified to call {fn_name}")
+        if not isinstance(ctx, Context):
+            raise WASMRuntimeError("Context object expected")
+        
+        if ctx.module_id not in self._contexts:
+            raise WASMRuntimeError(f"Unknown module: {ctx}")
+        return self._contexts[ctx.module_id]
 
     
     def _next_module_id(self, path: str) -> str:
-        def _encode_module_id(path: str) -> str:
-            import base64
-            return base64.b64encode(path.encode('utf-8')).decode('utf-8')
-        
-        if path not in self._contexts:
-            return _encode_module_id(path)
-        
+
+        base_module_id = path
+        if base_module_id not in self._contexts:
+            return base_module_id
+
         idx = 2
         while f"{path}#{idx}" in self._contexts:
             idx += 1
-        return _encode_module_id(f"{path}#{idx}")
+        return f"{path}#{idx}"
 
 
-    def _validate_metadata(self, ctx: dict[str, any], fns: dict[str, dict[str, any]]):
+    def _validate_metadata(self, ctx: Context, fns: list[dict[str, Any]]):
         for item in fns:
             if 'name' not in item or 'id' not in item or 'args' not in item or 'return' not in item:
                 raise WASMRuntimeError(f"Function(s) in metadata is missing required fields")
@@ -54,42 +69,47 @@ class Runtime:
             if not item['return'] in ("int", "string", "null", "list[int]"):
                 raise WASMRuntimeError(f"Function {fn_name} has invalid return type")
             
+            for arg_type in item['args']:
+                if arg_type not in ("int", "string", "list[int]"):
+                    raise WASMRuntimeError(f"Function {fn_name} has invalid argument type: {arg_type}")
+            
         self._abi.validate_function_calls(
-            ctx['store'], 
-            ctx['instance'], 
+            ctx.store,
+            ctx.instance,
             self._mem_mgr, 
             self._typesys, 
             fns
         )
 
 
-    def _load_functions(self, ctx: dict[str, any]):
-        module_id = ctx['module_id']
-        if module_id in self._fn_map:
-            return
-        
+    def _load_functions(self, ctx: Context):
         fn_str = self._abi.get_functions(
-            ctx["store"],
-            ctx["instance"],
+            ctx.store,
+            ctx.instance,
             self._mem_mgr,
             self._typesys
         )
         
         metadata = json.loads(fn_str)
         self._validate_metadata(ctx, metadata['functions'])
-        self._fn_map[module_id] = {}
-        
+
+        fn_map: dict[str, dict[str, Any]] = {}
         for fn in metadata['functions']:
-            self._fn_map[module_id][fn["name"]] = fn
+            fn_map[fn["name"]] = fn
+        ctx.functions = fn_map
 
 
     def load_module(self, path: str):
-        ctx = self._loader.load(path)
+        raw_ctx = self._loader.load(path)
         module_id = self._next_module_id(path)
-        ctx['module_id'] = module_id
-
-        store = ctx['store']
-        instance = ctx['instance']
+        ctx = Context(
+            module_id=module_id,
+            store=raw_ctx['store'],
+            instance=raw_ctx['instance'],
+            functions={}
+        )
+        store = ctx.store
+        instance = ctx.instance
 
         self._abi.validate_exports(store, instance)
         self._abi.call_init(store, instance)
@@ -97,35 +117,29 @@ class Runtime:
         self._load_functions(ctx)
         self._contexts[module_id] = ctx
 
-        print(ctx)
-
-        return module_id
+        return ctx
     
 
-    def unload_module(self, ctx: str):
+    def unload_module(self, ctx: Context):
         ctx = self._resolve_ctx(ctx)
-        module_id = ctx['module_id']
+        module_id = ctx.module_id
         self._cleanup(ctx)
-
-        if module_id in self._fn_map:
-            del self._fn_map[module_id]
 
         if module_id in self._contexts:
             del self._contexts[module_id]
 
 
     def get_modules(self):
-        return list(self._fn_map.keys())
+        return list(self._contexts.values())
     
 
-    def get_functions(self, ctx: str):
+    def get_functions(self, ctx: Context):
         ctx = self._resolve_ctx(ctx)
         
-        module_id = ctx['module_id']
-        if module_id not in self._fn_map:
-            raise WASMRuntimeError(f"{module_id} was not loaded or has no function metadata")
-        
-        module_fns = self._fn_map[module_id]
+        if not ctx.functions:
+            raise WASMRuntimeError(f"{ctx.module_id} was not loaded or has no function metadata")
+
+        module_fns = ctx.functions
         formatted_map = ""
 
         for name, details in module_fns.items():
@@ -137,12 +151,12 @@ class Runtime:
         return formatted_map    
     
 
-    def _resolve_req(self, ctx: dict[str, any], func_name: str, args: list) -> int:
-        module_id = ctx['module_id']
-        if module_id not in self._fn_map:
+    def _resolve_req(self, ctx: Context, func_name: str, args: list) -> int:
+        module_id = ctx.module_id
+        if not ctx.functions:
             raise WASMRuntimeError(f"{module_id} was not loaded or has no function metadata")
         
-        module_fns = self._fn_map[module_id]
+        module_fns = ctx.functions
 
         if func_name not in module_fns:
             raise WASMRuntimeError(f"Function {func_name} not found in module {module_id}")
@@ -178,18 +192,18 @@ class Runtime:
         }
     
     
-    def _execute(self, ctx: dict[str, any], func_name: str, args: list):
+    def _execute(self, ctx: Context, func_name: str, args: list):
         req = self._resolve_req(ctx, func_name, args)
         return self._abi.call_function(
-            ctx["store"],
-            ctx["instance"],
+            ctx.store,
+            ctx.instance,
             self._mem_mgr,
             self._typesys,
             req
         )
     
 
-    def call(self, ctx: str, func_name: str, *args):
+    def call(self, ctx: Context | None, func_name: str, *args):
         try:
             ctx = self._resolve_ctx(ctx)
             return self._execute(ctx, func_name, list(args))
@@ -198,20 +212,20 @@ class Runtime:
             
 
     def run(self, path: str, func_name: str, *args):
-        module_id = None
+        ctx = None
         try:
-            module_id = self.load_module(path)
-            ctx = self._resolve_ctx(module_id)
+            ctx = self.load_module(path)
+            ctx = self._resolve_ctx(ctx)
             return self._execute(ctx, func_name, list(args))
         except Exception as e:
             return f'[WASM Runtime Error] {e}'
         finally:
-            if module_id and module_id in self._contexts:
-                self.unload_module(module_id)
+            if ctx and ctx.module_id in self._contexts:
+                self.unload_module(ctx)
 
 
-    def _cleanup(self, ctx: dict[str, any]):
+    def _cleanup(self, ctx: Context):
         self._abi.call_cleanup(
-            ctx["store"],
-            ctx["instance"]
+            ctx.store,
+            ctx.instance
         )
