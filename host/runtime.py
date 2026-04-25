@@ -10,13 +10,13 @@ from host.typesys import TypeSystem
 import json
 
 class PluginProxy:
-    def __init__(self, runtime, module_id):
+    def __init__(self, runtime, ctx):
         self._runtime = runtime
-        self._module_id = module_id
+        self._ctx = ctx
         
     def __getattr__(self, func_name):
         def wrapper(*args):
-            return self._runtime.call(self._module_id, func_name, *args)
+            return self._runtime.call(self._ctx, func_name, *args)
         return wrapper
 
 
@@ -125,9 +125,9 @@ class Runtime:
         self._abi.call_init(store, instance)
         
         self._load_functions(ctx)
-        self.contexts[module_id] = ctx
+        self._contexts[module_id] = ctx
         
-        return PluginProxy(self, module_id)
+        return PluginProxy(self, ctx)
     
 
     def unload_module(self, ctx: Context):
