@@ -9,6 +9,16 @@ from host.memory import MemoryManager
 from host.typesys import TypeSystem
 import json
 
+class PluginProxy:
+    def __init__(self, runtime, module_id):
+        self._runtime = runtime
+        self._module_id = module_id
+        
+    def __getattr__(self, func_name):
+        def wrapper(*args):
+            return self._runtime.call(self._module_id, func_name, *args)
+        return wrapper
+
 
 class Runtime:
     def __init__(self):
@@ -115,9 +125,9 @@ class Runtime:
         self._abi.call_init(store, instance)
         
         self._load_functions(ctx)
-        self._contexts[module_id] = ctx
-
-        return ctx
+        self.contexts[module_id] = ctx
+        
+        return PluginProxy(self, module_id)
     
 
     def unload_module(self, ctx: Context):
