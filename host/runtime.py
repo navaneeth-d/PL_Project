@@ -35,7 +35,7 @@ class Runtime:
         return method
 
 
-    def _resolve_ctx(self, ctx: Context | None, fn_name: str) -> Context:
+    def _resolve_ctx(self, ctx: Context | None, fn_name: str = "function") -> Context:
         if ctx is None:
             if len(self._contexts) == 0:
                 raise WASMRuntimeError("No modules loaded")
