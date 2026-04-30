@@ -224,8 +224,8 @@ class Runtime:
     def run(self, path: str, func_name: str, *args):
         ctx = None
         try:
-            ctx = self.load_module(path)
-            ctx = self._resolve_ctx(ctx)
+            plugin = self.load_module(path)
+            ctx = plugin._ctx
             return self._execute(ctx, func_name, list(args))
         except Exception as e:
             return f'[WASM Runtime Error] {e}'
