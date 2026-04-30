@@ -13,7 +13,7 @@ class PluginProxy:
     def __init__(self, runtime, ctx):
         self._runtime = runtime
         self._ctx = ctx
-        
+
     def __getattr__(self, func_name):
         def wrapper(*args):
             return self._runtime.call(self._ctx, func_name, *args)
@@ -218,7 +218,7 @@ class Runtime:
             ctx = self._resolve_ctx(ctx)
             return self._execute(ctx, func_name, list(args))
         except Exception as e:
-            print(traceback.format_exc())
+            return f'[WASM Runtime Error] {e}'
             
 
     def run(self, path: str, func_name: str, *args):

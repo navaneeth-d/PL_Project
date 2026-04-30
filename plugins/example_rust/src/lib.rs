@@ -76,12 +76,12 @@ fn create_response(count: i32, item_size: i32, payload: &[u8]) -> *mut u8 {
 #[no_mangle]
 pub extern "C" fn get_functions() -> *mut u8 {
     let json = br#"{"functions": [
-        {"id": 1, "name": "factorial", "args": ["int"], "return": "int"},
-        {"id": 2, "name": "fibonacci", "args": ["int"], "return": "int"},
-        {"id": 3, "name": "is_prime",  "args": ["int"], "return": "int"},
-        {"id": 4, "name": "greet",     "args": ["string"], "return": "string"},
-        {"id": 5, "name": "noReturn",  "args": [], "return": "null"},
-        {"id": 6, "name": "num_of_args", "args": ["int", "int"], "return": "int"}
+        {"id": 1, "name": "sumarray", "args": ["list[int]"], "return": "int"},
+        {"id": 2, "name": "mul", "args": ["list[int]"], "return": "int"},
+        {"id": 3, "name": "sumab", "args": ["int", "int"], "return": "int"},
+        {"id": 4, "name": "greet", "args": ["string"], "return": "string"},
+        {"id": 5, "name": "noReturn", "args": [], "return": "null"},
+        {"id": 6, "name": "doubleArray", "args": ["list[int]"], "return": "list[int]"}
     ]}"#;
     
     create_response(json.len() as i32, 1, json)
@@ -93,64 +93,101 @@ pub extern "C" fn call_function(ptr: *mut u8, _len: i32) -> *mut u8 {
     if ptr.is_null() { return ptr; }
 
     unsafe {
-        // Read func_id
         let header = slice::from_raw_parts(ptr, 8);
         let func_id = i32::from_le_bytes(header[0..4].try_into().unwrap_or([0; 4]));
-        
-        // Read num_args (it's the 4 bytes immediately after func_id)
-        let num_args = i32::from_le_bytes(header[4..8].try_into().unwrap_or([0; 4]));
+
+        let args_ptr = ptr.add(8);
 
         match func_id {
-            1 | 2 | 3 => {
-                // For math functions, extract the first integer argument at offset 16
-                let arg_bytes = slice::from_raw_parts(ptr.add(16), 4);
-                let n = i32::from_le_bytes(arg_bytes.try_into().unwrap_or([0; 4]));
+            1 => { // sumarray
+                let size = i32::from_le_bytes(slice::from_raw_parts(args_ptr, 4).try_into().unwrap_or([0; 4])) as usize;
+                let num_elements = i32::from_le_bytes(slice::from_raw_parts(args_ptr.add(4), 4).try_into().unwrap_or([0; 4])) as usize;
                 
-                match func_id {
-                    1 => {
-                        let res = (1..=n).fold(1i32, |acc, i| acc.saturating_mul(i));
-                        create_response(1, 4, &res.to_le_bytes())
-                    }
-                    2 => {
-                        let mut a: (i32, i32) = (0, 1);
-                        for _ in 0..n { a = (a.1, a.0.saturating_add(a.1)); }
-                        create_response(1, 4, &a.0.to_le_bytes())
-                    }
-                    3 => {
-                        let is_p = if n < 2 { 0 } else { 
-                            (2..n).take_while(|i| i * i <= n).all(|i| n % i != 0) as i32 
-                        };
-                        create_response(1, 4, &is_p.to_le_bytes())
-                    }
-                    _ => ptr::null_mut()
+                let mut sum: i32 = 0;
+                let mut offset = 8;
+                for _ in 0..num_elements {
+                    let arg = i32::from_le_bytes(slice::from_raw_parts(args_ptr.add(offset), 4).try_into().unwrap_or([0; 4]));
+                    sum = sum.wrapping_add(arg);
+                    offset += size;
                 }
+                create_response(1, 4, &sum.to_le_bytes())
+            }
+            2 => { // mul
+                let size = i32::from_le_bytes(slice::from_raw_parts(args_ptr, 4).try_into().unwrap_or([0; 4])) as usize;
+                let num_elements = i32::from_le_bytes(slice::from_raw_parts(args_ptr.add(4), 4).try_into().unwrap_or([0; 4])) as usize;
+                
+                let mut product: i32 = 1;
+                let mut offset = 8;
+                for _ in 0..num_elements {
+                    let arg = i32::from_le_bytes(slice::from_raw_parts(args_ptr.add(offset), 4).try_into().unwrap_or([0; 4]));
+                    product = product.wrapping_mul(arg);
+                    offset += size;
+                }
+                create_response(1, 4, &product.to_le_bytes())
+            }
+            3 => { // sumab
+                let mut offset = 0;
+                let size_a = i32::from_le_bytes(slice::from_raw_parts(args_ptr.add(offset), 4).try_into().unwrap_or([0; 4])) as usize;
+                let num_a = i32::from_le_bytes(slice::from_raw_parts(args_ptr.add(offset + 4), 4).try_into().unwrap_or([0; 4])) as usize;
+                offset += 8;
+                let a = i32::from_le_bytes(slice::from_raw_parts(args_ptr.add(offset), 4).try_into().unwrap_or([0; 4]));
+                offset += size_a * num_a;
+                
+                let _size_b = i32::from_le_bytes(slice::from_raw_parts(args_ptr.add(offset), 4).try_into().unwrap_or([0; 4])) as usize;
+                let _num_b = i32::from_le_bytes(slice::from_raw_parts(args_ptr.add(offset + 4), 4).try_into().unwrap_or([0; 4])) as usize;
+                offset += 8;
+                let b = i32::from_le_bytes(slice::from_raw_parts(args_ptr.add(offset), 4).try_into().unwrap_or([0; 4]));
+                
+                let sum = a.wrapping_add(b);
+                create_response(1, 4, &sum.to_le_bytes())
             }
             4 => { // greet
-                // String payload has: [item_size:4][item_count:4][bytes...]
-                let arg_header = slice::from_raw_parts(ptr.add(8), 8);
-                let item_size = i32::from_le_bytes(arg_header[0..4].try_into().unwrap_or([0; 4])) as usize;
-                let item_count = i32::from_le_bytes(arg_header[4..8].try_into().unwrap_or([0; 4])) as usize;
+                let item_size = i32::from_le_bytes(slice::from_raw_parts(args_ptr, 4).try_into().unwrap_or([0; 4])) as usize;
+                let item_count = i32::from_le_bytes(slice::from_raw_parts(args_ptr.add(4), 4).try_into().unwrap_or([0; 4])) as usize;
                 
-                let str_bytes = slice::from_raw_parts(ptr.add(16), item_size * item_count);
+                let str_len = item_size * item_count;
+                let str_bytes = slice::from_raw_parts(args_ptr.add(8), str_len);
                 
-                // Build "Hello, {name}!" using a stack buffer (since we have no_std/no allocations)
-                let mut buf = [0u8; 128]; 
-                let mut len = 0;
+                let buf_len = str_len + 8; // "Hello, " + name + "!"
+                let buf_ptr = malloc(buf_len);
+                if buf_ptr.is_null() { return ptr::null_mut(); }
                 
-                for &b in b"Hello, " { buf[len] = b; len += 1; }
+                let mut greet_len = 0;
+                let buf = slice::from_raw_parts_mut(buf_ptr, buf_len);
+                for &b in b"Hello, " { buf[greet_len] = b; greet_len += 1; }
                 for &b in str_bytes { 
-                    if len < buf.len() - 1 { buf[len] = b; len += 1; } 
+                    if b != 0 { buf[greet_len] = b; greet_len += 1; } 
                 }
-                buf[len] = b'!'; len += 1;
+                buf[greet_len] = b'!'; greet_len += 1;
                 
-                create_response(len as i32, 1, &buf[0..len])
+                create_response(greet_len as i32, 1, &buf[0..greet_len])
             }
             5 => { // noReturn
                 ptr::null_mut()
             }
-            6 => { // num_of_args
-                // Returns the total number of arguments passed in the WASM payload
-                create_response(1, 4, &num_args.to_le_bytes())
+            6 => { // doubleArray
+                let size = i32::from_le_bytes(slice::from_raw_parts(args_ptr, 4).try_into().unwrap_or([0; 4])) as usize;
+                let num_elements = i32::from_le_bytes(slice::from_raw_parts(args_ptr.add(4), 4).try_into().unwrap_or([0; 4])) as usize;
+                
+                let res_total_len = 12 + size * num_elements;
+                let res_ptr = malloc(res_total_len);
+                if !res_ptr.is_null() {
+                    let out = slice::from_raw_parts_mut(res_ptr, res_total_len);
+                    out[0..4].copy_from_slice(&(res_total_len as i32).to_le_bytes());
+                    out[4..8].copy_from_slice(&(num_elements as i32).to_le_bytes());
+                    out[8..12].copy_from_slice(&(size as i32).to_le_bytes());
+                    
+                    let mut offset = 8;
+                    let mut out_offset = 12;
+                    for _ in 0..num_elements {
+                        let arg = i32::from_le_bytes(slice::from_raw_parts(args_ptr.add(offset), 4).try_into().unwrap_or([0; 4]));
+                        let doubled = arg.wrapping_mul(2);
+                        out[out_offset..out_offset+4].copy_from_slice(&doubled.to_le_bytes());
+                        offset += size;
+                        out_offset += 4;
+                    }
+                }
+                res_ptr
             }
             _ => {
                 let msg = b"Function not found";

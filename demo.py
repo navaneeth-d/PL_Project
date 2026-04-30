@@ -57,21 +57,13 @@ if __name__ == "__main__":
     print("\n[Rust] Plugin Functions")
     print(rt.get_functions(rust_plugin._ctx))
 
-    print("\n[Rust] factorial(10):")
-    res = rust_plugin.factorial(10)
-    print(f"Result: {res}")
+    print("\n[Rust] Sum of array [1, 2, 3, 4, 5]:")
+    res = rust_plugin.sumarray([1, 2, 3, 4, 5])
+    print(f"Final sum: {res}")
 
-    print("\n[Rust] fibonacci(15):")
-    res = rust_plugin.fibonacci(15)
-    print(f"Result: {res}")
-
-    print("\n[Rust] is_prime(97):")
-    res = rust_plugin.is_prime(97)
-    print(f"Result: {res}  (1 = prime, 0 = not prime)")
-
-    print("\n[Rust] is_prime(100):")
-    res = rust_plugin.is_prime(100)
-    print(f"Result: {res}  (1 = prime, 0 = not prime)")
+    print("\n[Rust] Sum of 10 and 20:")
+    res = rust_plugin.sumab(10, 20)
+    print(f"Final sum: {res}")
 
     print("\n[Rust] Greeting:")
     name = input('Enter your name for Rust: ')
@@ -82,8 +74,20 @@ if __name__ == "__main__":
     res = rust_plugin.noReturn()
     print(f"Result: {res}")
 
-    print("\n[Rust] Number of args passed (expected 2):")
-    res = rust_plugin.num_of_args(1, 2)
+    print("\n[Rust] Function Returns array:")
+    res = rust_plugin.doubleArray([3, 1, 34, 932])
+    print(f"Result: {res}")
+
+    print("\n[Rust] Calling non-existent function:")
+    res = rust_plugin.doesNotExist()
     print(f"Result: {res}")
 
     rt.unload_module(rust_plugin._ctx)
+
+    print("\n[Rust] Calling function after unloading module:")
+    res = rust_plugin.sumab(10, 20)
+    print(f"Result: {res}")
+
+    print("\n[Rust] Running without loading the module:")
+    res = rt.run('plugins/build/example_rust.wasm', "sumab", 100, 20)
+    print(f"Result: {res}")
