@@ -9,16 +9,7 @@ from host.memory import MemoryManager
 from host.typesys import TypeSystem
 import json
 
-class PluginProxy:
-    def __init__(self, runtime, ctx):
-        self._runtime = runtime
-        self._ctx = ctx
-
-    def __getattr__(self, func_name):
-        def wrapper(*args):
-            return self._runtime.call(self._ctx, func_name, *args)
-        return wrapper
-
+from host.proxy import PluginProxy
 
 class Runtime:
     def __init__(self):
@@ -103,10 +94,13 @@ class Runtime:
         metadata = json.loads(fn_str)
         self._validate_metadata(ctx, metadata['functions'])
 
-        fn_map: dict[str, dict[str, Any]] = {}
+        fn_map: dict[str, list[dict[str, Any]]] = {}
         for fn in metadata['functions']:
-            fn_map[fn["name"]] = fn
+            if fn["name"] not in fn_map:
+                fn_map[fn["name"]] = []
+            fn_map[fn["name"]].append(fn)
         ctx.functions = fn_map
+
 
 
     def load_module(self, path: str):
@@ -152,11 +146,13 @@ class Runtime:
         module_fns = ctx.functions
         formatted_map = ""
 
-        for name, details in module_fns.items():
-            formatted_map += f"{name}: " + "{"
-            formatted_map += f"\n    args: {details['args']},"
-            formatted_map += f"\n    return: {details['return']}"
-            formatted_map += "\n}\n"
+        for name, overloads in module_fns.items():
+            for details in overloads:
+                formatted_map += f"{name}: " + "{"
+                formatted_map += f"\n    args: {details['args']},"
+                formatted_map += f"\n    return: {details['return']}"
+                formatted_map += "\n}\n"
+
 
         return formatted_map    
     
@@ -165,41 +161,47 @@ class Runtime:
         module_id = ctx.module_id
         if not ctx.functions:
             raise WASMRuntimeError(f"{module_id} was not loaded or has no function metadata")
-        
+            
         module_fns = ctx.functions
 
         if func_name not in module_fns:
             raise WASMRuntimeError(f"Function {func_name} not found in module {module_id}")
-        
-        fn_details = module_fns[func_name]
-        expected_args = fn_details['args']
+            
+        candidates = module_fns[func_name]
+        matched_fn = None
 
-        if len(expected_args) != len(args):
-            raise WASMRuntimeError(f"Function {func_name} expects {len(expected_args)} arguments but got {len(args)}")
-        
-        for i, (expected, actual) in enumerate(zip(expected_args, args)):
-            if expected == "int":
-                if not isinstance(actual, int):
-                    raise WASMRuntimeError(f"Argument {i+1} of function {func_name} expects an integer")
-            
-            elif expected == "string":
-                if not isinstance(actual, str):
-                    raise WASMRuntimeError(f"Argument {i+1} of function {func_name} expects a string")
-            
-            elif expected == "list[int]":
-                if isinstance(actual, list):
-                    if not all(isinstance(x, int) for x in actual):
-                        raise WASMRuntimeError(f"Argument {i+1} of function {func_name} expects a list of integers")
-                else: 
-                    raise WASMRuntimeError(f"Argument {i+1} of function {func_name} expects a list")
-            else:
-                raise WASMRuntimeError(f"Argument {i+1} of function {func_name} has an unsupported type")
+        # Check each overloaded version of the function
+        for candidate in candidates:
+            expected_args = candidate['args']
+                
+            # 1. Check length
+            if len(expected_args) != len(args):
+                continue
+                
+            # 2. Check types
+            types_match = True
+            for expected, actual in zip(expected_args, args):
+                if expected == "int" and not isinstance(actual, int):
+                    types_match = False
+                elif expected == "string" and not isinstance(actual, str):
+                    types_match = False
+                elif expected == "list[int]":
+                    if not isinstance(actual, list) or not all(isinstance(x, int) for x in actual):
+                        types_match = False
+                
+            if types_match:
+                matched_fn = candidate
+                break  # We found the correct overload!
+
+        if not matched_fn:
+            raise WASMRuntimeError(f"No overloaded version of {func_name} matched the provided arguments.")
 
         return {
-            "function": fn_details['id'], 
+            "function": matched_fn['id'], 
             "args": args, 
-            'argspec': expected_args
+            'argspec': matched_fn['args']
         }
+
     
     
     def _execute(self, ctx: Context, func_name: str, args: list):

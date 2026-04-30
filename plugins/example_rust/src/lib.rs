@@ -81,8 +81,10 @@ pub extern "C" fn get_functions() -> *mut u8 {
         {"id": 3, "name": "sumab", "args": ["int", "int"], "return": "int"},
         {"id": 4, "name": "greet", "args": ["string"], "return": "string"},
         {"id": 5, "name": "noReturn", "args": [], "return": "null"},
-        {"id": 6, "name": "doubleArray", "args": ["list[int]"], "return": "list[int]"}
+        {"id": 6, "name": "doubleArray", "args": ["list[int]"], "return": "list[int]"},
+        {"id": 7, "name": "greet", "args": ["string", "string"], "return": "string"}
     ]}"#;
+
     
     create_response(json.len() as i32, 1, json)
 }
@@ -188,6 +190,40 @@ pub extern "C" fn call_function(ptr: *mut u8, _len: i32) -> *mut u8 {
                     }
                 }
                 res_ptr
+            }
+            7 => { // greet_full (overloaded)
+                let mut offset = 0;
+                
+                // Read first string
+                let item_size1 = i32::from_le_bytes(slice::from_raw_parts(args_ptr.add(offset), 4).try_into().unwrap_or([0; 4])) as usize;
+                let item_count1 = i32::from_le_bytes(slice::from_raw_parts(args_ptr.add(offset + 4), 4).try_into().unwrap_or([0; 4])) as usize;
+                let str_len1 = item_size1 * item_count1;
+                let str_bytes1 = slice::from_raw_parts(args_ptr.add(offset + 8), str_len1);
+                
+                // Jump memory offset to the second argument
+                offset += 8 + str_len1;
+                
+                // Read second string
+                let item_size2 = i32::from_le_bytes(slice::from_raw_parts(args_ptr.add(offset), 4).try_into().unwrap_or([0; 4])) as usize;
+                let item_count2 = i32::from_le_bytes(slice::from_raw_parts(args_ptr.add(offset + 4), 4).try_into().unwrap_or([0; 4])) as usize;
+                let str_len2 = item_size2 * item_count2;
+                let str_bytes2 = slice::from_raw_parts(args_ptr.add(offset + 8), str_len2);
+                
+                // Allocate exact buffer size needed: "Hello, " + str1 + " " + str2 + "!"
+                let buf_len = 7 + str_len1 + 1 + str_len2 + 1;
+                let buf_ptr = malloc(buf_len);
+                if buf_ptr.is_null() { return ptr::null_mut(); }
+                
+                let mut len = 0;
+                let buf = slice::from_raw_parts_mut(buf_ptr, buf_len);
+                
+                for &b in b"Hello, " { buf[len] = b; len += 1; }
+                for &b in str_bytes1 { if b != 0 { buf[len] = b; len += 1; } }
+                buf[len] = b' '; len += 1;
+                for &b in str_bytes2 { if b != 0 { buf[len] = b; len += 1; } }
+                buf[len] = b'!'; len += 1;
+                
+                create_response(len as i32, 1, &buf[0..len])
             }
             _ => {
                 let msg = b"Function not found";

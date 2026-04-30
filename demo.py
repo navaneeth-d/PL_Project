@@ -22,10 +22,17 @@ if __name__ == "__main__":
     print(f"Final sum: {res}")
 
 
-    print("\n[C] Greeting:")
+    print("\n[C] Calling greet with ONE string:")
     name = input('Enter ur name: ')
     res = c_plugin.greet(name)
     print(f"Greeting: {res}")
+
+    print("\n[C] Calling greet with TWO strings:")
+    first_name = input('Enter your first name: ')
+    last_name = input('Enter your last name: ')
+    res_full = c_plugin.greet(first_name, last_name)
+    print(f"Full Greeting: {res_full}")
+
 
 
     print("\n[C] Function with no return:")
@@ -65,9 +72,15 @@ if __name__ == "__main__":
     res = rust_plugin.sumab(10, 20)
     print(f"Final sum: {res}")
 
-    print("\n[Rust] Greeting:")
+    print("\n[Rust] Calling greet with ONE string:")
     name = input('Enter your name for Rust: ')
     res = rust_plugin.greet(name)
+    print(f"Greeting: {res}")
+
+    print("\n[Rust] Calling greet with TWO string:")
+    firstname = input('Enter your first name for Rust: ')
+    lastname = input('Enter your last name for Rust: ')
+    res = rust_plugin.greet(firstname, lastname)
     print(f"Greeting: {res}")
 
     print("\n[Rust] Function with no return:")
