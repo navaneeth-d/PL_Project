@@ -42,11 +42,13 @@ class MemoryManager:
     def free(self, store: Store, instance: Instance, ptr: int):
         self.get_free(store, instance)(store, ptr)
 
-    
+    # Call the plugin’s malloc export
     def write_bytes(self, store: Store, instance: Instance, data_bytes: bytes):
         if not data_bytes:
             raise ValueError("cannot write empty payload")
         ptr = self.alloc(store, instance, len(data_bytes))
+
+        # safely inject the encoded binary data directly into the WASM linear memory, strictly within bounds.
         self.write(store, instance, ptr, data_bytes)
         return ptr, len(data_bytes)
 

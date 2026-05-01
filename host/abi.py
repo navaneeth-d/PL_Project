@@ -1,3 +1,5 @@
+import new_plugin
+import new_plugin
 from wasmtime import Instance, Store
 from host.error import WASMRuntimeError
 from host.memory import MemoryManager
@@ -24,7 +26,7 @@ class ABIManager:
         except Exception as e:
             raise WASMRuntimeError(f"{fn_name} {e}")
         
-        
+    # It checks if module explicitly exports all the functions from self.reqd_fns
     def validate_exports(self, store: Store, instance: Instance):
         exports = instance.exports(store)
         for fn in self.reqd_fns:
@@ -69,7 +71,7 @@ class ABIManager:
             raise WASMRuntimeError(f"Missing required function: {name}")
         return exports[name]
     
-
+    # It safely invokes the plugin’s init export using the invoke() wrapper to prevent host crashes during setup.
     def call_init(self, store: Store, instance: Instance):
         self._invoke(store, instance, "init")
 

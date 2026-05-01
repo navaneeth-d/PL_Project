@@ -78,6 +78,10 @@ class Runtime:
 
 
     def _load_functions(self, ctx: Context):
+        '''This calls ABIManager.get functions(), decodes the returned JSON string, and
+            rigorously validates the metadata (e.g., ensuring correct type signatures like int
+            or list[int]) using Runtime. validate metadata(). It maps these into ctx.functions,
+            creating the routing table.'''
         fn_str = self._abi.get_functions(
             ctx.store,
             ctx.instance,
@@ -96,7 +100,7 @@ class Runtime:
         ctx.functions = fn_map
 
 
-
+    # Initialization of .wasm modules
     def load_module(self, path: str):
         raw_ctx = self._loader.load(path)
         module_id = self._next_module_id(path)
@@ -109,9 +113,13 @@ class Runtime:
         store = ctx.store
         instance = ctx.instance
 
+        # Check if module exports all the functions(init, cleanup, malloc, free, call_functions, get_functions)
         self._abi.validate_exports(store, instance)
+
+        # It safely invokes the plugin’s init export using the invoke() wrapper to prevent host crashes during setup
         self._abi.call_init(store, instance)
         
+        # Quering of plugins via self._load_functions()
         self._load_functions(ctx)
         self._contexts[module_id] = ctx
         
@@ -150,7 +158,7 @@ class Runtime:
 
         return formatted_map    
     
-
+    #It handles function overloading based on argument type
     def _resolve_req(self, ctx: Context, func_name: str, args: list) -> int:
         module_id = ctx.module_id
         if not ctx.functions:

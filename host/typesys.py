@@ -112,7 +112,7 @@ class TypeSystem:
 
         return arr
 
-    
+    # serialize the target Function ID and Python arguments into a flattened binary byte array
     def to_wasm(self, mem_mgr: MemoryManager, store: Store, instance: Instance, data: dict):
         raw = self.encode(data)
         return mem_mgr.write_bytes(store, instance, raw)

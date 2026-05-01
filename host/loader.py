@@ -20,7 +20,8 @@ class Loader():
         instance = self.linker.instantiate(store, module)
         return instance
     
-    
+    # Loads .wasm binary file from the filesystem and instantiate it, 
+    # returning a secure execution instance bound to a Context object.
     def load(self, path: str):
         module = self.load_module(path)
         store = self.create_store()
