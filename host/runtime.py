@@ -126,8 +126,8 @@ class Runtime:
         return PluginProxy(self, ctx)
     
 
-    def unload_module(self, ctx: Context):
-        ctx = self._resolve_ctx(ctx)
+    def unload_module(self, plugin: PluginProxy):
+        ctx = self._resolve_ctx(plugin._ctx)
         module_id = ctx.module_id
         self._cleanup(ctx)
 
@@ -235,7 +235,7 @@ class Runtime:
             return f'[WASM Runtime Error] {e}'
         finally:
             if ctx and ctx.module_id in self._contexts:
-                self.unload_module(ctx)
+                self.unload_module(plugin)
 
 
     def _cleanup(self, ctx: Context):

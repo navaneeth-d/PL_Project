@@ -27,63 +27,25 @@ Return data layout:
 #include <stdio.h>
 
 #define EXPORT(name) __attribute__((export_name(name)))
-typedef void *(*FuncPtr)(void *data);
-
-// ===== bump allocator =====
-
-#define HEAP_SIZE (64 * 1024)
-
-static unsigned char HEAP[HEAP_SIZE];
-static int HEAP_OFFSET = 0;
-
-static inline void *bump_alloc(int size)
-{
-    int aligned = (size + 7) & ~7;
-
-    if (HEAP_OFFSET + aligned > HEAP_SIZE)
-    {
-        return NULL;
-    }
-
-    void *ptr = &HEAP[HEAP_OFFSET];
-    HEAP_OFFSET += aligned;
-
-    return ptr;
-}
-
-static inline void bump_reset()
-{
-    HEAP_OFFSET = 0;
-}
+typedef void *(*FuncPtr)(void *data, int num_args);
 
 // !===== REQUIRED: lifecycle =====
 EXPORT("init")
-void init()
-{
-    bump_reset();
-}
+void init() {}
 
 EXPORT("cleanup")
-void cleanup()
-{
-    bump_reset();
-}
+void cleanup() {}
 
 // ===== response helper (example implementation) =====
-static inline void *make_response(int count, int item_size, void *data)
+void *make_response(int count, int item_size, void *data)
 {
-    int payload_size = count * item_size;
-    int total = 12 + payload_size;
+    int total = 12 + (count * item_size);
+    char *ptr = (char *)malloc(total);
 
-    char *ptr = (char *)bump_alloc(total);
-    if (!ptr)
-        return NULL;
-
-    ((int *)ptr)[0] = total;
-    ((int *)ptr)[1] = count;
-    ((int *)ptr)[2] = item_size;
-
-    memcpy(ptr + 12, data, payload_size);
+    memcpy(ptr, &total, 4);
+    memcpy(ptr + 4, &count, 4);
+    memcpy(ptr + 8, &item_size, 4);
+    memcpy(ptr + 12, data, count * item_size);
 
     return ptr;
 }
@@ -115,8 +77,7 @@ void *get_functions()
                      "{\"id\": 3, \"name\": \"sumab\", \"args\": [\"int\", \"int\"], \"return\": \"int\"},"
                      "{\"id\": 4, \"name\": \"greet\", \"args\": [\"string\"], \"return\": \"string\"},"
                      "{\"id\": 5, \"name\": \"noReturn\", \"args\": [], \"return\": \"null\"},"
-                     "{\"id\": 6, \"name\": \"doubleArray\", \"args\": [\"list[int]\"], \"return\": \"list[int]\"},"
-                     "{\"id\": 7, \"name\": \"greet\", \"args\": [\"string\", \"string\"], \"return\": \"string\"}"
+                     "{\"id\": 6, \"name\": \"doubleArray\", \"args\": [\"list[int]\"], \"return\": \"list[int]\"}"
                      "]"
                      "}";
     return make_response(strlen(response), 1, response);
@@ -131,41 +92,41 @@ Each function receives:
 Must return:
     pointer to response buffer (see schema above)
 */
-void *sumarray(void *data)
+void *sumarray(void *data, int num_args)
 {
-    int size = *(int *)data;
-    int num_elements = *(int *)((char *)data + 4);
-
-    int *arr = (int *)((char *)data + 8);
-
     int sum = 0;
-
-    for (int i = 0; i < num_elements; i++)
+    int size, num_elements;
+    int offset = 4;
+    memcpy(&size, data, 4);
+    memcpy(&num_elements, data + offset, 4);
+    for (int j = 0; j < num_elements; j++)
     {
-        sum += arr[i];
+        int arg;
+        offset += size;
+        memcpy(&arg, data + offset, size);
+        sum += arg;
     }
-
     return make_response(1, 4, &sum);
 }
 
-void *mul(void *data)
+void *mul(void *data, int num_args)
 {
-    int size = *(int *)data;
-    int num_elements = *(int *)((char *)data + 4);
-
-    int *arr = (int *)((char *)data + 8);
-
     int product = 1;
-
-    for (int i = 0; i < num_elements; i++)
+    int size, num_elements;
+    int offset = 4;
+    memcpy(&size, data, 4);
+    memcpy(&num_elements, data + offset, 4);
+    for (int j = 0; j < num_elements; j++)
     {
-        product *= arr[i];
+        int arg;
+        offset += size;
+        memcpy(&arg, data + offset, size);
+        product *= arg;
     }
-
     return make_response(1, 4, &product);
 }
 
-void *sumab(void *data)
+void *sumab(void *data, int num_args)
 {
     int sum = 0;
     int size, num_elements;
@@ -186,83 +147,44 @@ void *sumab(void *data)
     return make_response(1, 4, &sum);
 }
 
-void *greet(void *data)
+void *greet(void *data, int num_args)
 {
     int size, num_elements;
     memcpy(&size, data, 4);
     memcpy(&num_elements, data + 4, 4);
 
-    char *name = (char *)bump_alloc((size * num_elements) + 1);
+    char *name = (char *)malloc((size * num_elements) + 1);
     memcpy(name, data + 8, size * num_elements);
     name[size * num_elements] = '\0';
 
-    char *greeting = (char *)bump_alloc(size * num_elements + 8);
+    char *greeting = (char *)malloc(size * num_elements + 8);
     snprintf(greeting, size * num_elements + 8, "Hello, %s!", name);
 
     void *res = make_response(strlen(greeting), 1, greeting);
+    free(name);
+    free(greeting);
     return res;
 }
 
-void *greet_full(void *data)
-{
-    // Read first argument (First Name)
-    int size1, num_elements1;
-    memcpy(&size1, data, 4);
-    memcpy(&num_elements1, data + 4, 4);
-
-    char *first_name = (char *)bump_alloc((size1 * num_elements1) + 1);
-    memcpy(first_name, data + 8, size1 * num_elements1);
-    first_name[size1 * num_elements1] = '\0';
-
-    // Calculate offset to jump to the second argument
-    int offset = 8 + (size1 * num_elements1);
-
-    // Read second argument (Last Name)
-    int size2, num_elements2;
-    memcpy(&size2, data + offset, 4);
-    memcpy(&num_elements2, data + offset + 4, 4);
-
-    char *last_name = (char *)bump_alloc((size2 * num_elements2) + 1);
-    memcpy(last_name, data + offset + 8, size2 * num_elements2);
-    last_name[size2 * num_elements2] = '\0';
-
-    // Build the full greeting
-    char *greeting = (char *)bump_alloc(strlen(first_name) + strlen(last_name) + 10);
-    sprintf(greeting, "Hello, %s %s!", first_name, last_name);
-
-    void *res = make_response(strlen(greeting), 1, greeting);
-    return res;
-}
-
-void *noReturn(void *data)
+void *noReturn(void *data, int num_args)
 {
     return NULL;
 }
 
-void *doubleArray(void *data)
+void *doubleArray(void *data, int num_args)
 {
-    int size = *(int *)data;
-    int num_elements = *(int *)((char *)data + 4);
+    int size, num_elements;
+    memcpy(&size, data, 4);
+    memcpy(&num_elements, data + 4, 4);
 
-    int total = 12 + (num_elements * size);
-
-    char *ptr = (char *)bump_alloc(total);
-    if (!ptr)
-        return NULL;
-
-    ((int *)ptr)[0] = total;
-    ((int *)ptr)[1] = num_elements;
-    ((int *)ptr)[2] = size;
-
-    int *input = (int *)((char *)data + 8);
-    int *output = (int *)(ptr + 12);
+    int arr[num_elements];
+    memcpy(arr, data + 8, size * num_elements);
 
     for (int i = 0; i < num_elements; i++)
     {
-        output[i] = input[i] * 2;
+        arr[i] *= 2;
     }
-
-    return ptr;
+    return make_response(num_elements, size, arr);
 }
 
 int number_of_args(void *data)
@@ -281,8 +203,7 @@ int number_of_args(void *data)
 EXPORT("call_function")
 void *call_function(void *ptr, int len)
 {
-    bump_reset();
-    FuncPtr funcs[] = {sumarray, mul, sumab, greet, noReturn, doubleArray, greet_full};
+    FuncPtr funcs[] = {sumarray, mul, sumab, greet, noReturn, doubleArray};
     int id;
     memcpy(&id, ptr, 4);
     ptr += 4;
@@ -292,11 +213,11 @@ void *call_function(void *ptr, int len)
     ptr += 4;
     len -= 4;
 
-    if (id < 1 || id > 7)
+    if (id < 1 || id > 6)
     {
         char *error = "Function not found";
         return make_response(strlen(error), 1, error);
     }
 
-    return funcs[id - 1](ptr);
+    return funcs[id - 1](ptr, num_args);
 }

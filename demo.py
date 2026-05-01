@@ -47,7 +47,7 @@ if __name__ == "__main__":
     res = c_plugin.doesNotExist()
     print(f"Result: {res}")
 
-    rt.unload_module(c_plugin._ctx)
+    rt.unload_module(c_plugin)
 
     print("\n[C] Calling function after unloading module:")
     res = c_plugin.sumab(10, 20)
@@ -95,7 +95,7 @@ if __name__ == "__main__":
     res = rust_plugin.doesNotExist()
     print(f"Result: {res}")
 
-    rt.unload_module(rust_plugin._ctx)
+    rt.unload_module(rust_plugin)
 
     print("\n[Rust] Calling function after unloading module:")
     res = rust_plugin.sumab(10, 20)
