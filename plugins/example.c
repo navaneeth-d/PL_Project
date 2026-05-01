@@ -77,7 +77,8 @@ void *get_functions()
                      "{\"id\": 3, \"name\": \"sumab\", \"args\": [\"int\", \"int\"], \"return\": \"int\"},"
                      "{\"id\": 4, \"name\": \"greet\", \"args\": [\"string\"], \"return\": \"string\"},"
                      "{\"id\": 5, \"name\": \"noReturn\", \"args\": [], \"return\": \"null\"},"
-                     "{\"id\": 6, \"name\": \"doubleArray\", \"args\": [\"list[int]\"], \"return\": \"list[int]\"}"
+                     "{\"id\": 6, \"name\": \"doubleArray\", \"args\": [\"list[int]\"], \"return\": \"list[int]\"},"
+                     "{\"id\": 7, \"name\": \"greet\", \"args\": [\"string\", \"string\"], \"return\": \"string\"}"
                      "]"
                      "}";
     return make_response(strlen(response), 1, response);
@@ -166,6 +167,41 @@ void *greet(void *data, int num_args)
     return res;
 }
 
+void *greet_full(void *data, int num_args)
+{
+    // Read first argument (First Name)
+    int size1, num_elements1;
+    memcpy(&size1, data, 4);
+    memcpy(&num_elements1, data + 4, 4);
+
+    char *first_name = (char *)malloc((size1 * num_elements1) + 1);
+    memcpy(first_name, data + 8, size1 * num_elements1);
+    first_name[size1 * num_elements1] = '\0';
+
+    // Calculate offset to jump to the second argument
+    int offset = 8 + (size1 * num_elements1);
+
+    // Read second argument (Last Name)
+    int size2, num_elements2;
+    memcpy(&size2, data + offset, 4);
+    memcpy(&num_elements2, data + offset + 4, 4);
+
+    char *last_name = (char *)malloc((size2 * num_elements2) + 1);
+    memcpy(last_name, data + offset + 8, size2 * num_elements2);
+    last_name[size2 * num_elements2] = '\0';
+
+    // Build the full greeting
+    char *greeting = (char *)malloc(strlen(first_name) + strlen(last_name) + 10);
+    sprintf(greeting, "Hello, %s %s!", first_name, last_name);
+
+    void *res = make_response(strlen(greeting), 1, greeting);
+
+    free(first_name);
+    free(last_name);
+    free(greeting);
+    return res;
+}
+
 void *noReturn(void *data, int num_args)
 {
     return NULL;
@@ -203,7 +239,7 @@ int number_of_args(void *data)
 EXPORT("call_function")
 void *call_function(void *ptr, int len)
 {
-    FuncPtr funcs[] = {sumarray, mul, sumab, greet, noReturn, doubleArray};
+    FuncPtr funcs[] = {sumarray, mul, sumab, greet, noReturn, doubleArray, greet_full};
     int id;
     memcpy(&id, ptr, 4);
     ptr += 4;
@@ -213,7 +249,7 @@ void *call_function(void *ptr, int len)
     ptr += 4;
     len -= 4;
 
-    if (id < 1 || id > 6)
+    if (id < 1 || id > 7)
     {
         char *error = "Function not found";
         return make_response(strlen(error), 1, error);
