@@ -28,10 +28,10 @@ fn greet_full(first: &str, last: &str) -> String {
     format!("Hello, {} {}!", first, last)
 }
 
-const HEAVY_WARMUP: usize = 200;
-const HEAVY_RUNS: usize = 2500;
-const SUMARRAY_LEN: usize = 80;
-const INPUT_ROWS: usize = 2500;
+const HEAVY_WARMUP: usize = 1000;
+const HEAVY_RUNS: usize = 10000;
+const SUMARRAY_LEN: usize = 1000;
+const INPUT_ROWS: usize = 1000;
 
 fn percentile(values: &[f64], p: f64) -> f64 {
     let mut sorted = values.to_vec();

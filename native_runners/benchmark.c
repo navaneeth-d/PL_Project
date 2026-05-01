@@ -7,10 +7,10 @@
 #include <time.h>
 #include <math.h>
 
-#define HEAVY_WARMUP 200
-#define HEAVY_RUNS 2500
-#define SUMARRAY_LEN 80
-#define INPUT_ROWS 2500
+#define HEAVY_WARMUP 1000
+#define HEAVY_RUNS 10000
+#define SUMARRAY_LEN 1000
+#define INPUT_ROWS 1000
 
 extern void *sumarray(void *);
 extern void *mul(void *);

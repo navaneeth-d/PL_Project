@@ -1,274 +1,260 @@
-/*
-============================= CONTRACT / SCHEMA ==============================
-
-Receive data layout:
-
-    [func_id:4]
-    [num_args:4]
-
-    For each arg:
-        [item_size:4]        // size of each element (e.g. int=4, char=1)
-        [item_count:4]       // number of elements
-        [data: ...]          // raw bytes
-
-
-Return data layout:
-
-    [total_length:4]         // total bytes including header
-    [num_items:4]            // number of items
-    [item_size:4]            // size of each item
-    [data: ...]              // raw bytes
-
-==============================================================================
-*/
-
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdint.h>
 
-#define EXPORT(name) __attribute__((export_name(name)))
 typedef void *(*FuncPtr)(void *data);
 
-// !===== REQUIRED: lifecycle =====
-EXPORT("init")
-void init() {}
+#define HEAP_SIZE (64 * 1024)
 
-EXPORT("cleanup")
-void cleanup() {}
+static unsigned char HEAP[HEAP_SIZE];
+static uint32_t HEAP_OFFSET = 0;
 
-// ===== response helper (example implementation) =====
-static inline void *make_response(int count, int item_size, void *data)
+// ========================= BUMP ALLOCATOR =========================
+
+static inline void *bump_alloc(uint32_t size)
 {
-    int payload_size = count * item_size;
-    int total = 12 + payload_size;
+    size = (size + 7u) & ~7u;
 
-    char *ptr = (char *)malloc(total);
-    if (!ptr)
+    if (HEAP_OFFSET + size > HEAP_SIZE)
         return NULL;
 
-    ((int *)ptr)[0] = total;
-    ((int *)ptr)[1] = count;
-    ((int *)ptr)[2] = item_size;
-
-    memcpy(ptr + 12, data, payload_size);
+    void *ptr = HEAP + HEAP_OFFSET;
+    HEAP_OFFSET += size;
 
     return ptr;
 }
 
-// !===== REQUIRED: metadata =====
-/*
-Return JSON describing available functions.
-
-Expected format:
-
+static inline void bump_reset(void)
 {
-  "functions": [
-    {
-      "id": int,
-      "name": string,
-      "args": string,
-      "return": string
-    }
-  ]
-}
-*/
-EXPORT("get_functions")
-void *get_functions()
-{
-    char *response = "{"
-                     "\"functions\": ["
-                     "{\"id\": 1, \"name\": \"sumarray\", \"args\": [\"list[int]\"], \"return\": \"int\"},"
-                     "{\"id\": 2, \"name\": \"mul\", \"args\": [\"list[int]\"], \"return\": \"int\"},"
-                     "{\"id\": 3, \"name\": \"sumab\", \"args\": [\"int\", \"int\"], \"return\": \"int\"},"
-                     "{\"id\": 4, \"name\": \"greet\", \"args\": [\"string\"], \"return\": \"string\"},"
-                     "{\"id\": 5, \"name\": \"noReturn\", \"args\": [], \"return\": \"null\"},"
-                     "{\"id\": 6, \"name\": \"doubleArray\", \"args\": [\"list[int]\"], \"return\": \"list[int]\"},"
-                     "{\"id\": 7, \"name\": \"greet\", \"args\": [\"string\", \"string\"], \"return\": \"string\"}"
-                     "]"
-                     "}";
-    return make_response(strlen(response), 1, response);
+    HEAP_OFFSET = 0;
 }
 
-// !===== USER FUNCTIONS =====
-/*
-Each function receives:
-    data     → pointer to encoded arguments
-    num_args → number of arguments
+void init(void)
+{
+    bump_reset();
+}
 
-Must return:
-    pointer to response buffer (see schema above)
-*/
+void cleanup(void)
+{
+    bump_reset();
+}
+
+// ========================= RESPONSE =========================
+
+static inline void *make_response(uint32_t count, uint32_t item_size, const void *data)
+{
+    uint32_t payload = count * item_size;
+    uint32_t total = payload + 12;
+
+    uint8_t *ptr = (uint8_t *)bump_alloc(total);
+    if (!ptr)
+        return NULL;
+
+    ((uint32_t *)ptr)[0] = total;
+    ((uint32_t *)ptr)[1] = count;
+    ((uint32_t *)ptr)[2] = item_size;
+
+    memcpy(ptr + 12, data, payload);
+
+    return ptr;
+}
+
+// ========================= METADATA =========================
+
+void *get_functions(void)
+{
+    static const char json[] =
+        "{"
+        "\"functions\":["
+        "{\"id\":1,\"name\":\"sumarray\",\"args\":[\"list[int]\"],\"return\":\"int\"},"
+        "{\"id\":2,\"name\":\"mul\",\"args\":[\"list[int]\"],\"return\":\"int\"},"
+        "{\"id\":3,\"name\":\"sumab\",\"args\":[\"int\",\"int\"],\"return\":\"int\"},"
+        "{\"id\":4,\"name\":\"greet\",\"args\":[\"string\"],\"return\":\"string\"},"
+        "{\"id\":5,\"name\":\"noReturn\",\"args\":[],\"return\":\"null\"},"
+        "{\"id\":6,\"name\":\"doubleArray\",\"args\":[\"list[int]\"],\"return\":\"list[int]\"},"
+        "{\"id\":7,\"name\":\"greet\",\"args\":[\"string\",\"string\"],\"return\":\"string\"}"
+        "]"
+        "}";
+
+    return make_response((uint32_t)(sizeof(json) - 1), 1, json);
+}
+
+// ========================= HELPERS =========================
+
+static inline uint32_t read_u32(const void *p)
+{
+    return *(const uint32_t *)p;
+}
+
+// ========================= FUNCTIONS =========================
+
 void *sumarray(void *data)
 {
-    int size = *(int *)data;
-    int num_elements = *(int *)((char *)data + 4);
+    uint8_t *p = (uint8_t *)data;
 
-    int *arr = (int *)((char *)data + 8);
+    uint32_t count = read_u32(p + 4);
+    int32_t *arr = (int32_t *)(p + 8);
 
-    int sum = 0;
+    int32_t sum = 0;
 
-    for (int i = 0; i < num_elements; i++)
-    {
+    for (uint32_t i = 0; i < count; ++i)
         sum += arr[i];
-    }
 
     return make_response(1, 4, &sum);
 }
 
 void *mul(void *data)
 {
-    int size = *(int *)data;
-    int num_elements = *(int *)((char *)data + 4);
+    uint8_t *p = (uint8_t *)data;
 
-    int *arr = (int *)((char *)data + 8);
+    uint32_t count = read_u32(p + 4);
+    int32_t *arr = (int32_t *)(p + 8);
 
-    int product = 1;
+    int32_t product = 1;
 
-    for (int i = 0; i < num_elements; i++)
-    {
+    for (uint32_t i = 0; i < count; ++i)
         product *= arr[i];
-    }
 
     return make_response(1, 4, &product);
 }
 
 void *sumab(void *data)
 {
-    int sum = 0;
-    int size, num_elements;
+    uint8_t *p = (uint8_t *)data;
 
-    memcpy(&size, data, 4);
-    memcpy(&num_elements, data + 4, 4);
+    int32_t a = *(int32_t *)(p + 8);
 
-    int a;
-    memcpy(&a, data + 8, size);
-    sum += a;
+    uint32_t offset = 8 + read_u32(p) * read_u32(p + 4);
 
-    memcpy(&size, data + 12, 4);
-    memcpy(&num_elements, data + 16, 4);
+    int32_t b = *(int32_t *)(p + offset + 8);
 
-    int b;
-    memcpy(&b, data + 20, size);
-    sum += b;
+    int32_t sum = a + b;
+
     return make_response(1, 4, &sum);
 }
 
 void *greet(void *data)
 {
-    int size, num_elements;
-    memcpy(&size, data, 4);
-    memcpy(&num_elements, data + 4, 4);
+    uint8_t *p = (uint8_t *)data;
 
-    char *name = (char *)malloc((size * num_elements) + 1);
-    memcpy(name, data + 8, size * num_elements);
-    name[size * num_elements] = '\0';
+    uint32_t len = read_u32(p) * read_u32(p + 4);
+    char *name = (char *)(p + 8);
 
-    char *greeting = (char *)malloc(size * num_elements + 8);
-    snprintf(greeting, size * num_elements + 8, "Hello, %s!", name);
+    static const char prefix[] = "Hello, ";
+    const uint32_t prefix_len = 7;
 
-    void *res = make_response(strlen(greeting), 1, greeting);
-    free(name);
-    free(greeting);
-    return res;
+    uint32_t out_len = prefix_len + len + 1;
+
+    char *out = (char *)bump_alloc(out_len);
+    if (!out)
+        return NULL;
+
+    memcpy(out, prefix, prefix_len);
+    memcpy(out + prefix_len, name, len);
+
+    out[prefix_len + len] = '!';
+
+    return make_response(out_len, 1, out);
 }
 
 void *greet_full(void *data)
 {
-    // Read first argument (First Name)
-    int size1, num_elements1;
-    memcpy(&size1, data, 4);
-    memcpy(&num_elements1, data + 4, 4);
+    uint8_t *p = (uint8_t *)data;
 
-    char *first_name = (char *)malloc((size1 * num_elements1) + 1);
-    memcpy(first_name, data + 8, size1 * num_elements1);
-    first_name[size1 * num_elements1] = '\0';
+    uint32_t len1 = read_u32(p) * read_u32(p + 4);
+    char *first = (char *)(p + 8);
 
-    // Calculate offset to jump to the second argument
-    int offset = 8 + (size1 * num_elements1);
+    uint32_t offset = 8 + len1;
 
-    // Read second argument (Last Name)
-    int size2, num_elements2;
-    memcpy(&size2, data + offset, 4);
-    memcpy(&num_elements2, data + offset + 4, 4);
+    uint32_t len2 = read_u32(p + offset) * read_u32(p + offset + 4);
+    char *last = (char *)(p + offset + 8);
 
-    char *last_name = (char *)malloc((size2 * num_elements2) + 1);
-    memcpy(last_name, data + offset + 8, size2 * num_elements2);
-    last_name[size2 * num_elements2] = '\0';
+    static const char prefix[] = "Hello, ";
+    const uint32_t prefix_len = 7;
 
-    // Build the full greeting
-    char *greeting = (char *)malloc(strlen(first_name) + strlen(last_name) + 10);
-    sprintf(greeting, "Hello, %s %s!", first_name, last_name);
+    uint32_t out_len = prefix_len + len1 + 1 + len2 + 1;
 
-    void *res = make_response(strlen(greeting), 1, greeting);
+    char *out = (char *)bump_alloc(out_len);
+    if (!out)
+        return NULL;
 
-    free(first_name);
-    free(last_name);
-    free(greeting);
-    return res;
+    uint32_t pos = 0;
+
+    memcpy(out + pos, prefix, prefix_len);
+    pos += prefix_len;
+
+    memcpy(out + pos, first, len1);
+    pos += len1;
+
+    out[pos++] = ' ';
+
+    memcpy(out + pos, last, len2);
+    pos += len2;
+
+    out[pos] = '!';
+
+    return make_response(out_len, 1, out);
 }
 
 void *noReturn(void *data)
 {
+    (void)data;
     return NULL;
 }
 
 void *doubleArray(void *data)
 {
-    int size = *(int *)data;
-    int num_elements = *(int *)((char *)data + 4);
+    uint8_t *p = (uint8_t *)data;
 
-    int total = 12 + (num_elements * size);
+    uint32_t count = read_u32(p + 4);
 
-    char *ptr = (char *)malloc(total);
-    if (!ptr)
+    int32_t *input = (int32_t *)(p + 8);
+
+    uint32_t total = 12 + (count * 4);
+
+    uint8_t *out = (uint8_t *)bump_alloc(total);
+    if (!out)
         return NULL;
 
-    ((int *)ptr)[0] = total;
-    ((int *)ptr)[1] = num_elements;
-    ((int *)ptr)[2] = size;
+    ((uint32_t *)out)[0] = total;
+    ((uint32_t *)out)[1] = count;
+    ((uint32_t *)out)[2] = 4;
 
-    int *input = (int *)((char *)data + 8);
-    int *output = (int *)(ptr + 12);
+    int32_t *result = (int32_t *)(out + 12);
 
-    for (int i = 0; i < num_elements; i++)
-    {
-        output[i] = input[i] * 2;
-    }
+    for (uint32_t i = 0; i < count; ++i)
+        result[i] = input[i] * 2;
 
-    return ptr;
+    return out;
 }
 
-int number_of_args(void *data)
-{
-    int num_args;
-    memcpy(&num_args, data, 4);
-    return num_args;
-}
+// ========================= DISPATCHER =========================
 
-// !===== REQUIRED: dispatcher =====
-/*
-- Reads function ID
-- Dispatches to correct function
-- Must return valid response buffer
-*/
-EXPORT("call_function")
 void *call_function(void *ptr, int len)
 {
-    FuncPtr funcs[] = {sumarray, mul, sumab, greet, noReturn, doubleArray, greet_full};
-    int id;
-    memcpy(&id, ptr, 4);
-    ptr += 4;
-    len -= 4;
+    (void)len;
 
-    int num_args = number_of_args(ptr);
-    ptr += 4;
-    len -= 4;
+    bump_reset();
+
+    static FuncPtr funcs[] = {
+        sumarray,
+        mul,
+        sumab,
+        greet,
+        noReturn,
+        doubleArray,
+        greet_full};
+
+    uint8_t *p = (uint8_t *)ptr;
+
+    uint32_t id = read_u32(p);
 
     if (id < 1 || id > 7)
     {
-        char *error = "Function not found";
-        return make_response(strlen(error), 1, error);
+        static const char err[] = "Function not found";
+        return make_response(sizeof(err) - 1, 1, err);
     }
 
-    return funcs[id - 1](ptr);
+    return funcs[id - 1](p + 8);
 }
