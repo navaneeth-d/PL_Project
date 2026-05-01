@@ -7,9 +7,9 @@ from host.error import WASMRuntimeError
 from host.loader import Loader
 from host.memory import MemoryManager
 from host.typesys import TypeSystem
+from host.proxy import PluginProxy
 import json
 
-from host.proxy import PluginProxy
 
 class Runtime:
     def __init__(self):
@@ -18,12 +18,6 @@ class Runtime:
         self._mem_mgr = MemoryManager()
         self._typesys = TypeSystem()
         self._contexts: dict[str, Context] = {}
-
-    
-    def __getattr__(self, name):
-        def method(ctx: Context | None, *args):
-            return self.call(ctx, name, *args)
-        return method
 
 
     def _resolve_ctx(self, ctx: Context | None, fn_name: str = "function") -> Context:

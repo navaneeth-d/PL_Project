@@ -1,0 +1,13 @@
+backend,workload,latency_avg_ms,latency_p95_ms,throughput_ops_per_sec
+Native C,sumarray,0.000100,0.000092,9997325.66
+Native C,mul,0.000105,0.000094,9553705.83
+Native C,sumab,0.000102,0.000076,9837377.24
+Native C,greet,0.000116,0.000119,8596599.28
+Native C,noReturn,0.000047,0.000048,21277304.12
+Native C,doubleArray,0.000279,0.001931,3586311.27
+Native Rust,sumarray,0.000051,0.000053,19519355.39
+Native Rust,mul,0.000056,0.000053,17811469.16
+Native Rust,sumab,0.000051,0.000053,19485276.92
+Native Rust,greet,0.000298,0.000294,3358968.98
+Native Rust,noReturn,0.000051,0.000053,19496673.87
+Native Rust,doubleArray,0.000052,0.000054,19179133.10

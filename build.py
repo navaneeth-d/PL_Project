@@ -64,10 +64,17 @@ class Builder:
             "emcc",
             str(file_path),
             "-o", str(output),
+
+            "-O3",
+            "-flto",
+
             "--no-entry",
-            "-s", "STANDALONE_WASM",
-            "-s", "EXPORT_ALL=1",
-            "-s", "EXPORTED_FUNCTIONS=_malloc,_free,_init,_cleanup,_call_function,_get_functions"
+
+            "-s", "STANDALONE_WASM=1",
+
+            "-s", "EXPORTED_FUNCTIONS=['_malloc','_free','_init','_cleanup','_call_function','_get_functions']",
+
+            "-s", "FILESYSTEM=0",
         ]
 
         self.run_cmd(cmd)

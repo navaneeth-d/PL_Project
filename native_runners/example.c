@@ -29,45 +29,12 @@ Return data layout:
 #define EXPORT(name) __attribute__((export_name(name)))
 typedef void *(*FuncPtr)(void *data);
 
-// ===== bump allocator =====
-
-#define HEAP_SIZE (64 * 1024)
-
-static unsigned char HEAP[HEAP_SIZE];
-static int HEAP_OFFSET = 0;
-
-static inline void *bump_alloc(int size)
-{
-    int aligned = (size + 7) & ~7;
-
-    if (HEAP_OFFSET + aligned > HEAP_SIZE)
-    {
-        return NULL;
-    }
-
-    void *ptr = &HEAP[HEAP_OFFSET];
-    HEAP_OFFSET += aligned;
-
-    return ptr;
-}
-
-static inline void bump_reset()
-{
-    HEAP_OFFSET = 0;
-}
-
 // !===== REQUIRED: lifecycle =====
 EXPORT("init")
-void init()
-{
-    bump_reset();
-}
+void init() {}
 
 EXPORT("cleanup")
-void cleanup()
-{
-    bump_reset();
-}
+void cleanup() {}
 
 // ===== response helper (example implementation) =====
 static inline void *make_response(int count, int item_size, void *data)
@@ -75,7 +42,7 @@ static inline void *make_response(int count, int item_size, void *data)
     int payload_size = count * item_size;
     int total = 12 + payload_size;
 
-    char *ptr = (char *)bump_alloc(total);
+    char *ptr = (char *)malloc(total);
     if (!ptr)
         return NULL;
 
@@ -192,14 +159,16 @@ void *greet(void *data)
     memcpy(&size, data, 4);
     memcpy(&num_elements, data + 4, 4);
 
-    char *name = (char *)bump_alloc((size * num_elements) + 1);
+    char *name = (char *)malloc((size * num_elements) + 1);
     memcpy(name, data + 8, size * num_elements);
     name[size * num_elements] = '\0';
 
-    char *greeting = (char *)bump_alloc(size * num_elements + 8);
+    char *greeting = (char *)malloc(size * num_elements + 8);
     snprintf(greeting, size * num_elements + 8, "Hello, %s!", name);
 
     void *res = make_response(strlen(greeting), 1, greeting);
+    free(name);
+    free(greeting);
     return res;
 }
 
@@ -210,7 +179,7 @@ void *greet_full(void *data)
     memcpy(&size1, data, 4);
     memcpy(&num_elements1, data + 4, 4);
 
-    char *first_name = (char *)bump_alloc((size1 * num_elements1) + 1);
+    char *first_name = (char *)malloc((size1 * num_elements1) + 1);
     memcpy(first_name, data + 8, size1 * num_elements1);
     first_name[size1 * num_elements1] = '\0';
 
@@ -222,15 +191,19 @@ void *greet_full(void *data)
     memcpy(&size2, data + offset, 4);
     memcpy(&num_elements2, data + offset + 4, 4);
 
-    char *last_name = (char *)bump_alloc((size2 * num_elements2) + 1);
+    char *last_name = (char *)malloc((size2 * num_elements2) + 1);
     memcpy(last_name, data + offset + 8, size2 * num_elements2);
     last_name[size2 * num_elements2] = '\0';
 
     // Build the full greeting
-    char *greeting = (char *)bump_alloc(strlen(first_name) + strlen(last_name) + 10);
+    char *greeting = (char *)malloc(strlen(first_name) + strlen(last_name) + 10);
     sprintf(greeting, "Hello, %s %s!", first_name, last_name);
 
     void *res = make_response(strlen(greeting), 1, greeting);
+
+    free(first_name);
+    free(last_name);
+    free(greeting);
     return res;
 }
 
@@ -246,7 +219,7 @@ void *doubleArray(void *data)
 
     int total = 12 + (num_elements * size);
 
-    char *ptr = (char *)bump_alloc(total);
+    char *ptr = (char *)malloc(total);
     if (!ptr)
         return NULL;
 
@@ -281,7 +254,6 @@ int number_of_args(void *data)
 EXPORT("call_function")
 void *call_function(void *ptr, int len)
 {
-    bump_reset();
     FuncPtr funcs[] = {sumarray, mul, sumab, greet, noReturn, doubleArray, greet_full};
     int id;
     memcpy(&id, ptr, 4);
