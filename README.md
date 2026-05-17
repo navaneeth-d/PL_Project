@@ -41,21 +41,38 @@ This allows the system to support **dynamic function dispatch and arbitrary data
 
 ```directory
 .
-├── build.py              # Compiles plugins to WASM (C/C++ path present)
-├── demo.ipynb            # Entry point for running the framework
-├── new_plugin.py         # Auto-generate plugin template
-├── plugins/              # Source plugins (C, C++)
-│   ├── example.c
-│   └── build/            # Generated WASM modules
+├── benchmark.ipynb
+├── build.py                    # Build helper to compile plugins into WASM
+├── demo.ipynb                  # Example runtime/demo notebook
 ├── host/
-│   ├── runtime.py        # High-level execution interface
-│   ├── loader.py         # WASM module loader
-│   ├── abi.py            # ABI validation and invocation
-│   ├── memory.py         # WASM memory management
-│   ├── context.py        # Module context management
-│   ├── proxy.py          # Plugin proxy for function calls
-│   ├── error.py          # Custom error class
-│   └── typesys.py        # Binary encoding / decoding
+│   ├── runtime.py              # High-level execution interface
+│   ├── loader.py               # WASM module loader (wasmtime)
+│   ├── abi.py                  # ABI encoding/decoding and validation
+│   ├── memory.py               # WASM memory helpers and allocation wrappers
+│   ├── context.py              # Module context container
+│   ├── proxy.py                # Plugin proxy for convenient calls from Python
+│   ├── error.py                # Custom runtime exceptions
+│   └── typesys.py              # Binary encode/decode helpers for types
+├── native_runners/             # Native C/Rust examples and benchmarks
+│   ├── benchmark.c             # Native benchmark helper (C)
+│   ├── compile.sh              # Helper script to build native runners
+│   ├── example.c               # Native example for testing
+│   ├── native_c_benchmark      # Native benchmark artifact/directory
+│   ├── native.csv              # Benchmark results
+│   └── native_rust_runner/
+│       ├── Cargo.toml
+│       └── src/
+│           ├── main.rs
+│           └── plugin.rs
+├── new_plugin.py               # Generates plugin template source
+├── plugins/                    # Source plugins
+│   ├── example.c               # Sample C plugin source
+│   └── example_rust/           # Rust plugin source
+│       ├── Cargo.toml
+│       └── src/
+│           └── lib.rs
+├── README.md
+└── requirements.txt            # Python dependencies
 ```
 
 ## Setup
