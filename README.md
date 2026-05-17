@@ -1,12 +1,16 @@
 # WebAssembly-Based Language Interoperability Framework
 
-## Overview
-
 This project implements a **Python-based framework for cross-language interoperability using WebAssembly (WASM)**. It enables programs written in different languages (such as C/C++) to be compiled into WASM modules and executed through a unified runtime.
 
 The system abstracts away language-specific differences and provides a **generic, extensible interface** for invoking functions across modules using a common ABI.
 
----
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python" alt="Python" />
+  <img src="https://img.shields.io/badge/WebAssembly-WASMTIME-654FF0?style=for-the-badge&logo=webassembly" alt="WebAssembly" />
+  <img src="https://img.shields.io/badge/Emscripten-Compiler-999999?style=for-the-badge" alt="Emscripten" />
+  <img src="https://img.shields.io/badge/Plugins-C%20%26%20RUST-00599C?style=for-the-badge&logo=plugin" alt="C/C++" />
+</p>
+
 
 ## Key Idea
 
@@ -17,8 +21,6 @@ Instead of directly calling functions with fixed signatures, this framework uses
 * Binary argument/result encoding
 
 This allows the system to support **dynamic function dispatch and arbitrary data types**.
-
----
 
 ## Features
 
@@ -35,14 +37,12 @@ This allows the system to support **dynamic function dispatch and arbitrary data
 * Safe execution support
 * Modular architecture (loader, runtime, ABI, memory manager, type system)
 
----
-
 ## Project Structure
 
 ```directory
 .
 ├── build.py              # Compiles plugins to WASM (C/C++ path present)
-├── demo.py               # Entry point for running the framework
+├── demo.ipynb            # Entry point for running the framework
 ├── new_plugin.py         # Auto-generate plugin template
 ├── plugins/              # Source plugins (C, C++)
 │   ├── example.c
@@ -52,11 +52,11 @@ This allows the system to support **dynamic function dispatch and arbitrary data
 │   ├── loader.py         # WASM module loader
 │   ├── abi.py            # ABI validation and invocation
 │   ├── memory.py         # WASM memory management
+│   ├── context.py        # Module context management
+│   ├── proxy.py          # Plugin proxy for function calls
 │   ├── error.py          # Custom error class
 │   └── typesys.py        # Binary encoding / decoding
 ```
-
----
 
 ## Setup
 
@@ -79,8 +79,6 @@ cd emsdk
 ./emsdk activate latest
 ```
 
----
-
 ## How It Works
 
 ### 1. Compilation
@@ -93,35 +91,29 @@ Source files are compiled into WASM modules:
 python build.py
 ```
 
----
-
 ### 2. Loading Modules
 
 Modules are loaded using the runtime:
 
 ```python
-ctx = rt.load_module("plugins/build/module.wasm")
+plugin = rt.load_module("plugins/build/module.wasm")
 ```
-
----
 
 ### 3. Function Discovery
 
 Each module exposes available functions:
 
 ```python
-rt.get_functions(ctx)
+rt.get_functions(plugin)
 ```
-
----
 
 ### 4. Function Execution
 
 All calls go through a single entry point:
 
 ```python
-rt.call(ctx, "sumarray", [1, 2, 3, 4, 5])
-rt.call(ctx, "sumab", 10, 20)
+plugin.sumarray([1, 2, 3, 4, 5])
+plugin.sumab(10, 20)
 ```
 
 Internally:
@@ -132,8 +124,6 @@ Internally:
 4. Written into WASM memory
 5. `call_function` is invoked
 6. Binary result is decoded into Python values
-
----
 
 ## ABI Contract
 
@@ -163,8 +153,6 @@ Return payload format (module → host):
 3. `item_size` (4 bytes)
 4. raw result bytes
 
----
-
 ## Limitations
 
 * Current binary protocol supports only int, string, int array, and null patterns used by the sample plugins
@@ -173,8 +161,6 @@ Return payload format (module → host):
 * Memory leaks possible if not handled carefully
 * Limited debugging visibility inside WASM
 * Not optimized for high-performance workloads
-
----
 
 ## Future Improvements
 
@@ -185,16 +171,12 @@ Return payload format (module → host):
 * Secure sandboxing and execution limits
 * Parallel execution support
 
----
-
 ## Technologies Used
 
 * WebAssembly
 * Wasmtime (runtime)
 * Emscripten (C/C++ → WASM)
 * Python (core framework)
-
----
 
 ## Conclusion
 
@@ -206,5 +188,3 @@ It highlights the trade-off between:
 * vs performance and type safety
 
 and provides a solid foundation for building more advanced runtime systems.
-
----

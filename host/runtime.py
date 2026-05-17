@@ -139,8 +139,8 @@ class Runtime:
         return list(self._contexts.values())
     
 
-    def get_functions(self, ctx: Context):
-        ctx = self._resolve_ctx(ctx)
+    def get_functions(self, plugin: PluginProxy):
+        ctx = self._resolve_ctx(plugin._ctx) 
         
         if not ctx.functions:
             raise WASMRuntimeError(f"{ctx.module_id} was not loaded or has no function metadata")
